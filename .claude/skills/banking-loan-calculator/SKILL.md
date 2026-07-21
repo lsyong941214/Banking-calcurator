@@ -1,6 +1,6 @@
 ---
 name: banking-loan-calculator
-description: Reference design for the "금융개발" (financial development) work in this project — a Java/Spring Boot MSA loan calculation engine backed by PostgreSQL. Consult this whenever working in this repo on anything related to loans, interest/repayment calculation, loan-engine-service, loan-schedule-service, the loan_contract/repayment_schedule schema, or the git commit/push workflow for this project. Always check this skill before writing new Java classes, DB migrations, or docker-compose changes here, even if the request only mentions one small piece (e.g. "add a new repayment type" or "fix the interest rounding") — it defines the conventions the whole codebase must stay consistent with.
+description: Reference design for the "금융개발" (financial development) work in this project — a Java/Spring Boot MSA loan calculation engine backed by PostgreSQL, plus its screens. Consult this whenever working in this repo on anything related to loans, interest/repayment calculation, loan-engine-service, loan-schedule-service, the loan_contract/repayment_schedule schema, the git commit/push workflow, or any screen/UI work (이자계산, 상환스케줄 보기, or new screens). Always check this skill before writing new Java classes, DB migrations, docker-compose changes, or HTML/CSS for a screen here, even if the request only mentions one small piece (e.g. "add a new repayment type", "fix the interest rounding", or "add a field to the screen") — it defines the conventions and design system the whole codebase must stay consistent with.
 ---
 
 # 금융개발 — Loan Calculation MSA
@@ -107,6 +107,29 @@ Non-negotiable rules, because this is money:
      as balance shrinks, so total payment decreases over time.
    - **만기일시 (bullet/maturity)**: interest-only every month, full principal due in
      the final installment alongside that month's interest.
+
+## UI / screen design
+
+Every screen in this project (이자계산, 상환스케줄 보기, and any new ones) follows the design
+tokens in [DESIGN.md](../../../DESIGN.md) at the repo root — a verified Toss TDS Mobile
+reference (colors, typography, spacing, radius, component states). Read it before styling
+anything, and treat its tokens as the single source of truth rather than inventing new
+colors, fonts, or one-off component geometry per screen:
+
+- **Colors**: primary `#3182f6` / hover `#2272eb`, foreground `#191f28`, body `#4e5968`,
+  muted `#8b95a1`, surface `#f2f4f6`, border `#e5e8eb`, weak-background `#e8f3ff` /
+  weak-foreground `#1b64da` (info/active states), danger `#e42939` (overdue/errors).
+- **Typography**: `Toss Product Sans` with a system-font fallback chain; body 16px/400,
+  body-small 14px/400 for most UI text, the h1–h4 scale only for page/section titles.
+- **Spacing/radius**: the 4/6/8/16/24/32px spacing scale and 4/6/10/14/16px radius scale
+  (16px + 56px height for xlarge primary buttons, matching the TDS button spec).
+- Don't merge TDS mobile geometry with invented "generic fintech" shadows, cards, or
+  animations that DESIGN.md explicitly doesn't document — extend deliberately and note it
+  as an extension rather than presenting it as verified TDS, per DESIGN.md's own rules.
+
+`static/index.html` in `loan-engine-service` already implements these tokens as CSS
+variables (`--color-primary`, `--space-*`, `--radius-*`, etc.) — reuse that variable set
+for any new screen instead of redefining the palette.
 
 ## Development roadmap
 
