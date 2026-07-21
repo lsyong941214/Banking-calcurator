@@ -14,16 +14,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * Stateless calculation: given a loan's terms and a reference date, works out what
- * is due (or refundable / penalized) on that date for each repayment method.
- *
- * There is no persisted payment history input (no "which installment" or "last paid
- * date" field), so the "current installment" is chosen as whichever scheduled due
- * date is nearest to the reference date. If that due date has already passed, the
- * gap is treated as overdue (연체); if it hasn't arrived yet, the gap is treated as
- * an early-payment window (선납). This is a simplifying assumption for the first
- * version of the screen — revisit if the business wants explicit installment/
- * payment-history tracking instead.
+ * Pure input-driven interest calculation simulation: no installment/payment history
+ * is tracked (that will come once the account concept is introduced), so the "due
+ * date" used for overdue/prepayment comparison is always the loan's first scheduled
+ * payment (newDate + 1 month), and the repayment-method formulas always use the full
+ * contract term as n. referenceDate is only used to measure days early/late against
+ * that single reference due date.
  */
 @Service
 public class InterestCalculationService {
@@ -48,11 +44,13 @@ public class InterestCalculationService {
         int termMonths = (int) ChronoUnit.MONTHS.between(newDate, maturityDate);
         BigDecimal appliedRate = request.baseRate().add(request.spreadRate()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal monthlyRate = appliedRate.divide(BigDecimal.valueOf(12), RATE_SCALE, RoundingMode.HALF_UP);
+        BigDecimal earlyRepaymentFeeRate = request.earlyRepaymentFeeRate() != null
+                ? request.earlyRepaymentFeeRate()
+                : policy.getEarlyRepaymentFeeRate();
 
-        int selectedIndex = selectCurrentInstallmentIndex(newDate, referenceDate, termMonths);
-        LocalDate dueDate = newDate.plusMonths(selectedIndex);
-        int remainingInstallments = termMonths - selectedIndex + 1;
-        boolean isLastInstallment = selectedIndex == termMonths;
+        LocalDate dueDate = newDate.plusMonths(1);
+        int remainingInstallments = termMonths;
+        boolean isLastInstallment = termMonths <= 1;
 
         long daysDiff = ChronoUnit.DAYS.between(referenceDate, dueDate); // >0: 선납, <0: 연체
         long prepaymentDays = Math.max(daysDiff, 0);
@@ -61,34 +59,16 @@ public class InterestCalculationService {
         List<RepaymentDueAmount> results = List.of(
                 buildResult(RepaymentType.EQUAL_PRINCIPAL_AND_INTEREST, balance, monthlyRate, appliedRate,
                         remainingInstallments, isLastInstallment, dueDate, prepaymentDays, overdueDays,
-                        newDate, maturityDate, referenceDate),
+                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate),
                 buildResult(RepaymentType.EQUAL_PRINCIPAL, balance, monthlyRate, appliedRate,
                         remainingInstallments, isLastInstallment, dueDate, prepaymentDays, overdueDays,
-                        newDate, maturityDate, referenceDate),
+                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate),
                 buildResult(RepaymentType.BULK, balance, monthlyRate, appliedRate,
                         remainingInstallments, isLastInstallment, dueDate, prepaymentDays, overdueDays,
-                        newDate, maturityDate, referenceDate)
+                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate)
         );
 
-        return new InterestCalculationResponse(termMonths, appliedRate, results);
-    }
-
-    private int selectCurrentInstallmentIndex(LocalDate newDate, LocalDate referenceDate, int termMonths) {
-        long elapsedMonths = ChronoUnit.MONTHS.between(newDate, referenceDate);
-        long priorIndex = Math.max(0, Math.min(elapsedMonths, termMonths));
-        long nextIndex = Math.min(priorIndex + 1, termMonths);
-
-        if (priorIndex == 0) {
-            return (int) nextIndex;
-        }
-
-        LocalDate priorDueDate = newDate.plusMonths(priorIndex);
-        LocalDate nextDueDate = newDate.plusMonths(nextIndex);
-
-        long distToPrior = ChronoUnit.DAYS.between(priorDueDate, referenceDate);
-        long distToNext = ChronoUnit.DAYS.between(referenceDate, nextDueDate);
-
-        return (int) (distToPrior <= distToNext ? priorIndex : nextIndex);
+        return new InterestCalculationResponse(termMonths, appliedRate, earlyRepaymentFeeRate, results);
     }
 
     private RepaymentDueAmount buildResult(
@@ -103,7 +83,8 @@ public class InterestCalculationService {
             long overdueDays,
             LocalDate newDate,
             LocalDate maturityDate,
-            LocalDate referenceDate
+            LocalDate referenceDate,
+            BigDecimal earlyRepaymentFeeRate
     ) {
         BigDecimal interest = balance.multiply(monthlyRate).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
         BigDecimal principal = calculatePrincipal(type, balance, monthlyRate, remainingInstallments, isLastInstallment, interest);
@@ -126,7 +107,7 @@ public class InterestCalculationService {
                 : balance.multiply(appliedRate).multiply(BigDecimal.valueOf(prepaymentDays))
                         .divide(daysInYear, MONEY_SCALE, RoundingMode.HALF_UP);
 
-        BigDecimal earlyRepaymentFee = calculateEarlyRepaymentFee(balance, newDate, maturityDate, referenceDate);
+        BigDecimal earlyRepaymentFee = calculateEarlyRepaymentFee(balance, newDate, maturityDate, referenceDate, earlyRepaymentFeeRate);
 
         BigDecimal totalDueAmount = principal
                 .add(overduePrincipalInterest)
@@ -168,8 +149,14 @@ public class InterestCalculationService {
         };
     }
 
-    private BigDecimal calculateEarlyRepaymentFee(BigDecimal balance, LocalDate newDate, LocalDate maturityDate, LocalDate referenceDate) {
-        if (!referenceDate.isBefore(maturityDate)) {
+    private BigDecimal calculateEarlyRepaymentFee(
+            BigDecimal balance,
+            LocalDate newDate,
+            LocalDate maturityDate,
+            LocalDate referenceDate,
+            BigDecimal earlyRepaymentFeeRate
+    ) {
+        if (!referenceDate.isBefore(maturityDate) || earlyRepaymentFeeRate.signum() == 0) {
             return BigDecimal.ZERO;
         }
         long remainingDays = ChronoUnit.DAYS.between(referenceDate, maturityDate);
@@ -177,7 +164,7 @@ public class InterestCalculationService {
         if (totalLoanDays <= 0) {
             return BigDecimal.ZERO;
         }
-        return balance.multiply(policy.getEarlyRepaymentFeeRate())
+        return balance.multiply(earlyRepaymentFeeRate)
                 .multiply(BigDecimal.valueOf(remainingDays))
                 .divide(BigDecimal.valueOf(totalLoanDays), MONEY_SCALE, RoundingMode.HALF_UP);
     }
@@ -194,6 +181,9 @@ public class InterestCalculationService {
         }
         if (request.outstandingPrincipal() == null || request.outstandingPrincipal().signum() < 0) {
             throw new IllegalArgumentException("대출잔액은 0 이상이어야 합니다.");
+        }
+        if (request.earlyRepaymentFeeRate() != null && request.earlyRepaymentFeeRate().signum() < 0) {
+            throw new IllegalArgumentException("중도상환수수료율은 0 이상이어야 합니다.");
         }
     }
 }

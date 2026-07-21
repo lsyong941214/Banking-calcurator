@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * baseRate/spreadRate are fractions (e.g. 0.0350 = 3.5%), not percentages.
+ * baseRate/spreadRate/earlyRepaymentFeeRate are fractions (e.g. 0.0350 = 3.5%), not percentages.
  */
 public record InterestCalculationRequest(
         LocalDate newDate,
@@ -12,6 +12,7 @@ public record InterestCalculationRequest(
         BigDecimal baseRate,
         BigDecimal spreadRate,
         BigDecimal outstandingPrincipal,
-        LocalDate referenceDate
+        LocalDate referenceDate,
+        BigDecimal earlyRepaymentFeeRate
 ) {
 }

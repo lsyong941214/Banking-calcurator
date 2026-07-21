@@ -1,0 +1,16 @@
+package com.example.engine.dto;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+/**
+ * baseRate/spreadRate are fractions (e.g. 0.0350 = 3.5%), not percentages.
+ */
+public record RepaymentScheduleRequest(
+        LocalDate newDate,
+        LocalDate maturityDate,
+        BigDecimal baseRate,
+        BigDecimal spreadRate,
+        BigDecimal principal
+) {
+}

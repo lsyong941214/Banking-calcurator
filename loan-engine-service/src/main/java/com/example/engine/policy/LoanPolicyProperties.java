@@ -14,8 +14,8 @@ public class LoanPolicyProperties {
     /** 연체가산이율 (연체이율 = 적용금리 + 이 값). */
     private BigDecimal overdueRateAddOn = new BigDecimal("0.03");
 
-    /** 중도상환수수료율. */
-    private BigDecimal earlyRepaymentFeeRate = new BigDecimal("0.014");
+    /** 중도상환수수료율 (화면에서 직접 입력/면제 가능; 값을 안 넘기면 이 기본값을 사용). */
+    private BigDecimal earlyRepaymentFeeRate = new BigDecimal("0.01");
 
     /** 일할계산 기준일수. */
     private int daysInYear = 365;

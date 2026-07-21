@@ -5,166 +5,327 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>이자계산</title>
 <style>
+  /* Toss TDS-derived tokens (see DESIGN.md) */
   :root {
-    --bg: #f5f6f8;
-    --card: #ffffff;
-    --border: #e2e5ea;
-    --text: #1c1f26;
-    --muted: #6b7280;
-    --accent: #2f6fed;
-    --accent-bg: #eaf1ff;
-    --danger: #d9483f;
-    --danger-bg: #fdecea;
-    --good: #1a7f4f;
+    --color-primary: #3182f6;
+    --color-primary-hover: #2272eb;
+    --color-canvas: #ffffff;
+    --color-foreground: #191f28;
+    --color-body: #4e5968;
+    --color-muted: #8b95a1;
+    --color-surface: #f2f4f6;
+    --color-border: #e5e8eb;
+    --color-on-primary: #ffffff;
+    --color-weak-bg: #e8f3ff;
+    --color-weak-fg: #1b64da;
+    --color-danger: #e42939;
+    --color-danger-weak-bg: #fdecea;
+
+    --font-sans: "Toss Product Sans", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+
+    --space-xs: 4px; --space-sm: 6px; --space-md: 8px; --space-lg: 16px; --space-xl: 24px; --space-xxl: 32px;
+    --radius-sm: 4px; --radius-md: 6px; --radius-btn-md: 10px; --radius-btn-lg: 14px; --radius-btn-xl: 16px;
+    --radius-card: 14px;
   }
+
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    padding: 32px 16px 80px;
+    font-family: var(--font-sans);
+    background: var(--color-surface);
+    color: var(--color-foreground);
   }
-  .container { max-width: 880px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 20px; }
+
+  .app-shell { display: flex; min-height: 100vh; }
+
+  /* --- Sidebar --- */
+  .sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--color-canvas);
+    border-right: 1px solid var(--color-border);
+    padding: var(--space-xl) var(--space-lg);
+  }
+  .sidebar .brand {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-foreground);
+    margin-bottom: var(--space-xxl);
+    padding: 0 var(--space-md);
+  }
+  .nav-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-body);
+    padding: 12px var(--space-md);
+    border-radius: var(--radius-btn-md);
+    cursor: pointer;
+    margin-bottom: var(--space-xs);
+  }
+  .nav-item:hover { background: var(--color-surface); }
+  .nav-item.active { background: var(--color-weak-bg); color: var(--color-weak-fg); }
+
+  /* --- Main content --- */
+  .content { flex: 1; padding: var(--space-xxl) var(--space-xxl) 80px; max-width: 920px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  h1 { font-size: 24px; font-weight: 600; line-height: 36px; margin: 0 0 var(--space-xl); color: var(--color-foreground); }
+
   .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 20px;
+    background: var(--color-canvas);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    padding: var(--space-xl);
+    margin-bottom: var(--space-lg);
   }
-  .card h2 { font-size: 15px; margin: 0 0 16px; color: var(--muted); font-weight: 600; }
+  .card h2 { font-size: 14px; font-weight: 600; margin: 0 0 var(--space-lg); color: var(--color-muted); }
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px 20px;
+    gap: var(--space-lg) 20px;
   }
   .field label {
     display: block;
     font-size: 13px;
-    color: var(--muted);
-    margin-bottom: 6px;
+    font-weight: 600;
+    color: var(--color-body);
+    margin-bottom: var(--space-sm);
   }
   .field input {
     width: 100%;
-    padding: 9px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 14px;
-    background: #fff;
-  }
-  .field input[readonly] {
-    background: #f2f3f5;
-    color: var(--muted);
-  }
-  .rate-pair { display: flex; gap: 8px; align-items: center; }
-  .rate-pair input { width: 100%; }
-  .rate-pair span { color: var(--muted); font-size: 13px; white-space: nowrap; }
-  button.primary {
-    margin-top: 20px;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
+    height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     font-size: 15px;
+    font-family: var(--font-sans);
+    background: var(--color-canvas);
+    color: var(--color-foreground);
+  }
+  .field input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.15);
+  }
+  .field input[readonly] { background: var(--color-surface); color: var(--color-muted); }
+  .field input:disabled { background: var(--color-surface); color: var(--color-muted); }
+
+  .rate-pair { display: flex; gap: var(--space-md); align-items: center; }
+  .rate-pair input { width: 100%; }
+  .rate-pair span { color: var(--color-muted); font-size: 13px; white-space: nowrap; }
+
+  .checkbox-label {
+    display: flex; align-items: center; gap: var(--space-sm);
+    font-size: 13px; font-weight: 600; color: var(--color-body);
+    white-space: nowrap; cursor: pointer;
+  }
+  .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-primary); cursor: pointer; }
+
+  button.primary {
+    margin-top: var(--space-xl);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    border: none;
+    border-radius: var(--radius-btn-xl);
+    height: 56px;
+    padding: 0 20px;
+    font-family: var(--font-sans);
+    font-size: 17px;
     font-weight: 600;
     cursor: pointer;
     width: 100%;
   }
-  button.primary:hover { filter: brightness(1.05); }
+  button.primary:hover { background: var(--color-primary-hover); }
   button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs { display: flex; gap: var(--space-md); margin-bottom: var(--space-lg); }
   .tab-btn {
     flex: 1;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    background: #fff;
-    border-radius: 8px;
+    height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--color-border);
+    background: var(--color-canvas);
+    border-radius: var(--radius-btn-md);
+    font-family: var(--font-sans);
     font-size: 14px;
     font-weight: 600;
-    color: var(--muted);
+    color: var(--color-muted);
     cursor: pointer;
   }
-  .tab-btn.active {
-    background: var(--accent-bg);
-    border-color: var(--accent);
-    color: var(--accent);
-  }
+  .tab-btn.active { background: var(--color-weak-bg); border-color: var(--color-primary); color: var(--color-weak-fg); }
 
-  table.result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  table.result-table td { padding: 10px 6px; border-bottom: 1px solid var(--border); }
-  table.result-table td.label { color: var(--muted); width: 45%; }
+  table.result-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.result-table td { padding: 12px 6px; border-bottom: 1px solid var(--color-border); }
+  table.result-table td.label { color: var(--color-body); width: 45%; }
   table.result-table td.value { text-align: right; font-variant-numeric: tabular-nums; }
-  table.result-table tr.total td { border-top: 2px solid var(--text); border-bottom: none; font-weight: 700; padding-top: 14px; }
-  .badge { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-  .badge.overdue { background: var(--danger-bg); color: var(--danger); }
-  .badge.prepay { background: var(--accent-bg); color: var(--accent); }
-  .badge.ontime { background: #eef7f0; color: var(--good); }
-  .meta { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
-  .error { color: var(--danger); font-size: 13px; margin-top: 10px; display: none; }
-  .placeholder { color: var(--muted); font-size: 14px; text-align: center; padding: 40px 0; }
+  table.result-table tr.total td { border-top: 2px solid var(--color-foreground); border-bottom: none; font-weight: 700; padding-top: 16px; font-size: 17px; }
+
+  .badge { display: inline-block; margin-left: var(--space-sm); padding: 2px 8px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
+  .badge.overdue { background: var(--color-danger-weak-bg); color: var(--color-danger); }
+  .badge.prepay { background: var(--color-weak-bg); color: var(--color-weak-fg); }
+  .badge.ontime { background: var(--color-surface); color: var(--color-body); }
+
+  .meta { color: var(--color-body); font-size: 14px; margin-bottom: var(--space-lg); }
+  .error { color: var(--color-danger); font-size: 13px; margin-top: var(--space-md); display: none; }
+  .placeholder { color: var(--color-muted); font-size: 14px; text-align: center; padding: 48px 0; }
+
+  .schedule-table-wrap { max-height: 480px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+  table.schedule-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.schedule-table thead th {
+    position: sticky; top: 0;
+    background: var(--color-surface);
+    color: var(--color-body);
+    font-weight: 600;
+    text-align: right;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  table.schedule-table thead th:first-child,
+  table.schedule-table thead th:nth-child(2) { text-align: left; }
+  table.schedule-table tbody td {
+    padding: 9px 12px;
+    text-align: right;
+    border-bottom: 1px solid var(--color-border);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-foreground);
+  }
+  table.schedule-table tbody td:first-child,
+  table.schedule-table tbody td:nth-child(2) { text-align: left; color: var(--color-body); }
+  table.schedule-table tbody tr:last-child td { font-weight: 700; }
 </style>
 </head>
 <body>
-<div class="container">
-  <h1>이자계산</h1>
+<div class="app-shell">
+  <nav class="sidebar">
+    <div class="brand">대출계산기</div>
+    <button class="nav-item active" data-view="interest">이자계산</button>
+    <button class="nav-item" data-view="schedule">상환스케줄 보기</button>
+  </nav>
 
-  <div class="card">
-    <h2>입력</h2>
-    <div class="grid">
-      <div class="field">
-        <label for="newDate">신규일자</label>
-        <input type="date" id="newDate" />
-      </div>
-      <div class="field">
-        <label for="maturityDate">만기일자</label>
-        <input type="date" id="maturityDate" />
-      </div>
-      <div class="field">
-        <label for="termMonths">거치개월 (만기 - 신규)</label>
-        <input type="text" id="termMonths" readonly placeholder="자동 계산" />
-      </div>
-      <div class="field">
-        <label for="referenceDate">기준일자</label>
-        <input type="date" id="referenceDate" />
-      </div>
-      <div class="field">
-        <label>적용금리 (기준금리 + 가산금리)</label>
-        <div class="rate-pair">
-          <input type="number" id="baseRate" step="0.01" placeholder="기준금리 %" />
-          <span>+</span>
-          <input type="number" id="spreadRate" step="0.01" placeholder="가산금리 %" />
-          <span>=</span>
-          <input type="text" id="appliedRate" readonly placeholder="%" style="max-width:90px" />
+  <main class="content">
+
+    <!-- ===================== 이자계산 ===================== -->
+    <section id="view-interest" class="view active">
+      <h1>이자계산</h1>
+
+      <div class="card">
+        <h2>입력</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="i-newDate">신규일자</label>
+            <input type="date" id="i-newDate" />
+          </div>
+          <div class="field">
+            <label for="i-maturityDate">만기일자</label>
+            <input type="date" id="i-maturityDate" />
+          </div>
+          <div class="field">
+            <label for="i-termMonths">거치개월 (만기 - 신규)</label>
+            <input type="text" id="i-termMonths" readonly placeholder="자동 계산" />
+          </div>
+          <div class="field">
+            <label for="i-referenceDate">기준일자</label>
+            <input type="date" id="i-referenceDate" />
+          </div>
+          <div class="field">
+            <label>적용금리 (기준금리 + 가산금리)</label>
+            <div class="rate-pair">
+              <input type="number" id="i-baseRate" step="0.01" placeholder="기준금리 %" />
+              <span>+</span>
+              <input type="number" id="i-spreadRate" step="0.01" placeholder="가산금리 %" />
+              <span>=</span>
+              <input type="text" id="i-appliedRate" readonly placeholder="%" style="max-width:90px" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="i-outstandingPrincipal">대출잔액 (원)</label>
+            <input type="text" inputmode="numeric" id="i-outstandingPrincipal" placeholder="예: 100,000,000" />
+          </div>
+          <div class="field">
+            <label>중도상환수수료율 (%)</label>
+            <div class="rate-pair">
+              <input type="number" id="i-feeRate" step="0.01" value="1" />
+              <label class="checkbox-label"><input type="checkbox" id="i-feeExempt" /> 면제</label>
+            </div>
+          </div>
         </div>
+        <button class="primary" id="i-calcBtn">계산하기</button>
+        <div class="error" id="i-errorBox"></div>
       </div>
-      <div class="field">
-        <label for="outstandingPrincipal">대출잔액 (원)</label>
-        <input type="number" id="outstandingPrincipal" step="1" placeholder="예: 100000000" />
-      </div>
-    </div>
-    <button class="primary" id="calcBtn">계산하기</button>
-    <div class="error" id="errorBox"></div>
-  </div>
 
-  <div class="card">
-    <h2>결과</h2>
-    <div class="tabs">
-      <button class="tab-btn active" data-type="EQUAL_PRINCIPAL_AND_INTEREST">원리금균등상환</button>
-      <button class="tab-btn" data-type="EQUAL_PRINCIPAL">원금균등상환</button>
-      <button class="tab-btn" data-type="BULK">만기일시상환</button>
-    </div>
-    <div id="resultArea"><div class="placeholder">좌측 입력 후 계산하기를 눌러주세요.</div></div>
-  </div>
+      <div class="card">
+        <h2>결과</h2>
+        <div class="tabs">
+          <button class="tab-btn active" data-type="EQUAL_PRINCIPAL_AND_INTEREST">원리금균등상환</button>
+          <button class="tab-btn" data-type="EQUAL_PRINCIPAL">원금균등상환</button>
+          <button class="tab-btn" data-type="BULK">만기일시상환</button>
+        </div>
+        <div id="i-resultArea"><div class="placeholder">좌측 입력 후 계산하기를 눌러주세요.</div></div>
+      </div>
+    </section>
+
+    <!-- ===================== 상환스케줄 보기 ===================== -->
+    <section id="view-schedule" class="view">
+      <h1>상환스케줄 보기</h1>
+
+      <div class="card">
+        <h2>입력</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="s-newDate">신규일자</label>
+            <input type="date" id="s-newDate" />
+          </div>
+          <div class="field">
+            <label for="s-maturityDate">만기일자</label>
+            <input type="date" id="s-maturityDate" />
+          </div>
+          <div class="field">
+            <label for="s-termMonths">거치개월 (만기 - 신규)</label>
+            <input type="text" id="s-termMonths" readonly placeholder="자동 계산" />
+          </div>
+          <div class="field">
+            <label>적용금리 (기준금리 + 가산금리)</label>
+            <div class="rate-pair">
+              <input type="number" id="s-baseRate" step="0.01" placeholder="기준금리 %" />
+              <span>+</span>
+              <input type="number" id="s-spreadRate" step="0.01" placeholder="가산금리 %" />
+              <span>=</span>
+              <input type="text" id="s-appliedRate" readonly placeholder="%" style="max-width:90px" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="s-principal">대출원금 (원)</label>
+            <input type="text" inputmode="numeric" id="s-principal" placeholder="예: 100,000,000" />
+          </div>
+        </div>
+        <button class="primary" id="s-calcBtn">조회하기</button>
+        <div class="error" id="s-errorBox"></div>
+      </div>
+
+      <div class="card">
+        <h2>결과</h2>
+        <div class="tabs">
+          <button class="tab-btn active" data-type="EQUAL_PRINCIPAL_AND_INTEREST">원리금균등상환</button>
+          <button class="tab-btn" data-type="EQUAL_PRINCIPAL">원금균등상환</button>
+          <button class="tab-btn" data-type="BULK">만기일시상환</button>
+        </div>
+        <div id="s-resultArea"><div class="placeholder">좌측 입력 후 조회하기를 눌러주세요.</div></div>
+      </div>
+    </section>
+
+  </main>
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let lastResponse = null;
-let activeType = 'EQUAL_PRINCIPAL_AND_INTEREST';
 
 function monthsBetween(a, b) {
   if (!a || !b) return null;
@@ -174,107 +335,220 @@ function monthsBetween(a, b) {
   return months;
 }
 
-function updateDerivedFields() {
-  const nd = $('newDate').value, md = $('maturityDate').value;
-  const term = monthsBetween(nd, md);
-  $('termMonths').value = (term !== null && term > 0) ? term + ' 개월' : '';
-
-  const base = parseFloat($('baseRate').value);
-  const spread = parseFloat($('spreadRate').value);
-  if (!isNaN(base) && !isNaN(spread)) {
-    $('appliedRate').value = (base + spread).toFixed(2) + '%';
-  } else {
-    $('appliedRate').value = '';
-  }
-}
-
-['newDate', 'maturityDate', 'baseRate', 'spreadRate'].forEach(id => {
-  $(id).addEventListener('input', updateDerivedFields);
-});
-
 function formatWon(v) {
-  const n = Number(v);
-  return n.toLocaleString('ko-KR') + '원';
+  return Number(v).toLocaleString('ko-KR') + '원';
 }
 
-function renderResult(type) {
-  if (!lastResponse) return;
-  const r = lastResponse.results.find(x => x.repaymentType === type);
-  if (!r) return;
-
-  let overdueBadge = '';
-  if (r.overdueDays > 0) {
-    overdueBadge = `<span class="badge overdue">연체 ${r.overdueDays}일</span>`;
-  } else if (r.prepaymentDays > 0) {
-    overdueBadge = `<span class="badge prepay">선납 ${r.prepaymentDays}일</span>`;
-  } else {
-    overdueBadge = `<span class="badge ontime">정시납부</span>`;
-  }
-
-  const html = `
-    <div class="meta">
-      납부(약정)일자: <strong>${r.dueDate}</strong> · 잔여회차: ${r.remainingInstallments}회 ${overdueBadge}
-    </div>
-    <table class="result-table">
-      <tr><td class="label">원금</td><td class="value">${formatWon(r.principal)}</td></tr>
-      <tr><td class="label">원금연체이자</td><td class="value">${formatWon(r.overduePrincipalInterest)}</td></tr>
-      <tr><td class="label">이자</td><td class="value">${formatWon(r.interest)}</td></tr>
-      <tr><td class="label">연체이자</td><td class="value">${formatWon(r.overdueInterest)}</td></tr>
-      <tr><td class="label">선납이자 (선납일수 ${r.prepaymentDays}일)</td><td class="value">- ${formatWon(r.prepaymentInterest)}</td></tr>
-      <tr><td class="label">중도상환수수료</td><td class="value">${formatWon(r.earlyRepaymentFee)}</td></tr>
-      <tr class="total"><td class="label">기준일자 납부금액</td><td class="value">${formatWon(r.totalDueAmount)}</td></tr>
-    </table>
-  `;
-  $('resultArea').innerHTML = html;
+function attachAmountFormatting(input) {
+  input.addEventListener('input', () => {
+    const raw = input.value.replace(/[^0-9]/g, '');
+    input.value = raw ? Number(raw).toLocaleString('ko-KR') : '';
+  });
 }
 
-document.querySelectorAll('.tab-btn').forEach(btn => {
+function parseAmount(input) {
+  const raw = input.value.replace(/[^0-9]/g, '');
+  return raw ? Number(raw) : NaN;
+}
+
+// ---------- Sidebar navigation ----------
+document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     btn.classList.add('active');
-    activeType = btn.dataset.type;
-    renderResult(activeType);
+    $('view-' + btn.dataset.view).classList.add('active');
   });
 });
 
-$('calcBtn').addEventListener('click', async () => {
-  $('errorBox').style.display = 'none';
-  const payload = {
-    newDate: $('newDate').value,
-    maturityDate: $('maturityDate').value,
-    baseRate: parseFloat($('baseRate').value) / 100,
-    spreadRate: parseFloat($('spreadRate').value) / 100,
-    outstandingPrincipal: parseFloat($('outstandingPrincipal').value),
-    referenceDate: $('referenceDate').value
-  };
+// ================= 이자계산 view =================
+(function () {
+  let lastResponse = null;
+  let activeType = 'EQUAL_PRINCIPAL_AND_INTEREST';
 
-  if (!payload.newDate || !payload.maturityDate || !payload.referenceDate ||
-      isNaN(payload.baseRate) || isNaN(payload.spreadRate) || isNaN(payload.outstandingPrincipal)) {
-    $('errorBox').textContent = '모든 입력값을 채워주세요.';
-    $('errorBox').style.display = 'block';
-    return;
+  attachAmountFormatting($('i-outstandingPrincipal'));
+
+  function updateDerivedFields() {
+    const term = monthsBetween($('i-newDate').value, $('i-maturityDate').value);
+    $('i-termMonths').value = (term !== null && term > 0) ? term + ' 개월' : '';
+
+    const base = parseFloat($('i-baseRate').value);
+    const spread = parseFloat($('i-spreadRate').value);
+    $('i-appliedRate').value = (!isNaN(base) && !isNaN(spread)) ? (base + spread).toFixed(2) + '%' : '';
+  }
+  ['i-newDate', 'i-maturityDate', 'i-baseRate', 'i-spreadRate'].forEach(id => {
+    $(id).addEventListener('input', updateDerivedFields);
+  });
+
+  $('i-feeExempt').addEventListener('change', () => {
+    $('i-feeRate').disabled = $('i-feeExempt').checked;
+  });
+
+  function renderResult(type) {
+    if (!lastResponse) return;
+    const r = lastResponse.results.find(x => x.repaymentType === type);
+    if (!r) return;
+
+    let badge;
+    if (r.overdueDays > 0) badge = `<span class="badge overdue">연체 ${r.overdueDays}일</span>`;
+    else if (r.prepaymentDays > 0) badge = `<span class="badge prepay">선납 ${r.prepaymentDays}일</span>`;
+    else badge = `<span class="badge ontime">정시납부</span>`;
+
+    $('i-resultArea').innerHTML = `
+      <div class="meta">납부(약정)일자: <strong>${r.dueDate}</strong> · 회차수: ${r.remainingInstallments}회 ${badge}</div>
+      <table class="result-table">
+        <tr><td class="label">원금</td><td class="value">${formatWon(r.principal)}</td></tr>
+        <tr><td class="label">원금연체이자</td><td class="value">${formatWon(r.overduePrincipalInterest)}</td></tr>
+        <tr><td class="label">이자</td><td class="value">${formatWon(r.interest)}</td></tr>
+        <tr><td class="label">연체이자</td><td class="value">${formatWon(r.overdueInterest)}</td></tr>
+        <tr><td class="label">선납이자 (선납일수 ${r.prepaymentDays}일)</td><td class="value">- ${formatWon(r.prepaymentInterest)}</td></tr>
+        <tr><td class="label">중도상환수수료</td><td class="value">${formatWon(r.earlyRepaymentFee)}</td></tr>
+        <tr class="total"><td class="label">기준일자 납부금액</td><td class="value">${formatWon(r.totalDueAmount)}</td></tr>
+      </table>
+    `;
   }
 
-  $('calcBtn').disabled = true;
-  try {
-    const res = await fetch('/api/v1/interest-calculations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+  document.querySelectorAll('#view-interest .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#view-interest .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeType = btn.dataset.type;
+      renderResult(activeType);
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || '계산 중 오류가 발생했습니다.');
+  });
+
+  $('i-calcBtn').addEventListener('click', async () => {
+    $('i-errorBox').style.display = 'none';
+    const payload = {
+      newDate: $('i-newDate').value,
+      maturityDate: $('i-maturityDate').value,
+      baseRate: parseFloat($('i-baseRate').value) / 100,
+      spreadRate: parseFloat($('i-spreadRate').value) / 100,
+      outstandingPrincipal: parseAmount($('i-outstandingPrincipal')),
+      referenceDate: $('i-referenceDate').value,
+      earlyRepaymentFeeRate: $('i-feeExempt').checked ? 0 : (parseFloat($('i-feeRate').value) / 100)
+    };
+
+    if (!payload.newDate || !payload.maturityDate || !payload.referenceDate ||
+        isNaN(payload.baseRate) || isNaN(payload.spreadRate) || isNaN(payload.outstandingPrincipal)) {
+      $('i-errorBox').textContent = '모든 입력값을 채워주세요.';
+      $('i-errorBox').style.display = 'block';
+      return;
     }
-    lastResponse = data;
-    renderResult(activeType);
-  } catch (e) {
-    $('errorBox').textContent = e.message;
-    $('errorBox').style.display = 'block';
-  } finally {
-    $('calcBtn').disabled = false;
+
+    $('i-calcBtn').disabled = true;
+    try {
+      const res = await fetch('/api/v1/interest-calculations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '계산 중 오류가 발생했습니다.');
+      lastResponse = data;
+      renderResult(activeType);
+    } catch (e) {
+      $('i-errorBox').textContent = e.message;
+      $('i-errorBox').style.display = 'block';
+    } finally {
+      $('i-calcBtn').disabled = false;
+    }
+  });
+})();
+
+// ================= 상환스케줄 보기 view =================
+(function () {
+  let lastResponse = null;
+  let activeType = 'EQUAL_PRINCIPAL_AND_INTEREST';
+
+  attachAmountFormatting($('s-principal'));
+
+  function updateDerivedFields() {
+    const term = monthsBetween($('s-newDate').value, $('s-maturityDate').value);
+    $('s-termMonths').value = (term !== null && term > 0) ? term + ' 개월' : '';
+
+    const base = parseFloat($('s-baseRate').value);
+    const spread = parseFloat($('s-spreadRate').value);
+    $('s-appliedRate').value = (!isNaN(base) && !isNaN(spread)) ? (base + spread).toFixed(2) + '%' : '';
   }
-});
+  ['s-newDate', 's-maturityDate', 's-baseRate', 's-spreadRate'].forEach(id => {
+    $(id).addEventListener('input', updateDerivedFields);
+  });
+
+  function renderResult(type) {
+    if (!lastResponse) return;
+    const r = lastResponse.results.find(x => x.repaymentType === type);
+    if (!r) return;
+
+    const rows = r.installments.map(row => `
+      <tr>
+        <td>${row.sequence}회</td>
+        <td>${row.dueDate}</td>
+        <td>${formatWon(row.principalPayment)}</td>
+        <td>${formatWon(row.interestPayment)}</td>
+        <td>${formatWon(row.totalPayment)}</td>
+        <td>${formatWon(row.remainingBalance)}</td>
+      </tr>
+    `).join('');
+
+    $('s-resultArea').innerHTML = `
+      <div class="meta">총 ${r.installments.length}회차</div>
+      <div class="schedule-table-wrap">
+        <table class="schedule-table">
+          <thead>
+            <tr><th>회차</th><th>납부일</th><th>원금</th><th>이자</th><th>납입액</th><th>잔액</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  document.querySelectorAll('#view-schedule .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#view-schedule .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeType = btn.dataset.type;
+      renderResult(activeType);
+    });
+  });
+
+  $('s-calcBtn').addEventListener('click', async () => {
+    $('s-errorBox').style.display = 'none';
+    const payload = {
+      newDate: $('s-newDate').value,
+      maturityDate: $('s-maturityDate').value,
+      baseRate: parseFloat($('s-baseRate').value) / 100,
+      spreadRate: parseFloat($('s-spreadRate').value) / 100,
+      principal: parseAmount($('s-principal'))
+    };
+
+    if (!payload.newDate || !payload.maturityDate ||
+        isNaN(payload.baseRate) || isNaN(payload.spreadRate) || isNaN(payload.principal)) {
+      $('s-errorBox').textContent = '모든 입력값을 채워주세요.';
+      $('s-errorBox').style.display = 'block';
+      return;
+    }
+
+    $('s-calcBtn').disabled = true;
+    try {
+      const res = await fetch('/api/v1/repayment-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '조회 중 오류가 발생했습니다.');
+      lastResponse = data;
+      renderResult(activeType);
+    } catch (e) {
+      $('s-errorBox').textContent = e.message;
+      $('s-errorBox').style.display = 'block';
+    } finally {
+      $('s-calcBtn').disabled = false;
+    }
+  });
+})();
 </script>
 </body>
 </html>

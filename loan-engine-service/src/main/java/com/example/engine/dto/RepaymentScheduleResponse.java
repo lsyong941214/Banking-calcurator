@@ -3,10 +3,9 @@ package com.example.engine.dto;
 import java.math.BigDecimal;
 import java.util.List;
 
-public record InterestCalculationResponse(
+public record RepaymentScheduleResponse(
         int termMonths,
         BigDecimal appliedRate,
-        BigDecimal earlyRepaymentFeeRateApplied,
-        List<RepaymentDueAmount> results
+        List<RepaymentScheduleTypeResult> results
 ) {
 }
