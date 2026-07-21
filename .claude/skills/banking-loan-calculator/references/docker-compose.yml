@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  loan-db:
+    image: postgres:15-alpine
+    container_name: loan-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: loandb
+      POSTGRES_USER: loanuser
+      POSTGRES_PASSWORD: loanpassword
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
