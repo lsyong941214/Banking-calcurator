@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# git hook 소스 (git이 .git/hooks/ 는 커밋에 포함시키지 않으므로 여기 보관).
+# 새로 clone한 저장소에서 다시 쓰려면:
+#   cp scripts/git-hooks/post-commit .git/hooks/post-commit && chmod +x .git/hooks/post-commit
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+CHANGED="$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")"
+
+if echo "$CHANGED" | grep -q '^loan-engine-service/'; then
+  echo "[post-commit] loan-engine-service 변경 감지 - 백그라운드에서 재빌드/재시작합니다."
+  nohup "$REPO_ROOT/scripts/rebuild-and-restart.sh" > /tmp/rebuild-and-restart.log 2>&1 &
+  disown
+fi

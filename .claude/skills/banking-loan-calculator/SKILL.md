@@ -19,6 +19,15 @@ to the user first.
   not one giant commit at the end). Push after committing so the remote stays current.
   Still confirm before the *first* push of a session, and before any force-push or
   history rewrite — those remain irreversible actions that need explicit sign-off.
+- **Live access points**: Render (always-on) at
+  https://banking-calcurator.onrender.com, and ngrok (only while the local Mac is
+  running) at https://whimsical-unadvised-divisibly.ngrok-free.dev — see README.md.
+- **Auto-restart on commit**: `.git/hooks/post-commit` (source tracked at
+  `scripts/git-hooks/post-commit`, since git doesn't version `.git/hooks/`) rebuilds
+  and restarts the locally-running `loan-engine-service` in the background whenever a
+  commit touches that directory, so the ngrok tunnel keeps serving current code
+  without a manual restart. No action needed after committing — just be aware the
+  local server briefly bounces a few seconds after each relevant commit.
 
 ## Architecture
 
