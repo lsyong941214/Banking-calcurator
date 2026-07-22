@@ -13,6 +13,7 @@ public record InterestCalculationRequest(
         BigDecimal spreadRate,
         BigDecimal outstandingPrincipal,
         LocalDate referenceDate,
-        BigDecimal earlyRepaymentFeeRate
+        BigDecimal earlyRepaymentFeeRate,
+        BigDecimal partialRepaymentAmount
 ) {
 }

@@ -1,5 +1,6 @@
 package com.example.engine.service;
 
+import com.example.engine.domain.EarlyRepaymentFeeExemption;
 import com.example.engine.domain.RepaymentType;
 import com.example.engine.dto.InterestCalculationRequest;
 import com.example.engine.dto.InterestCalculationResponse;
@@ -26,6 +27,9 @@ public class InterestCalculationService {
 
     private static final int MONEY_SCALE = 0;
     private static final int RATE_SCALE = 10;
+    private static final long THREE_YEARS_IN_DAYS = 1095;
+    private static final long WITHDRAWAL_PERIOD_DAYS = 14;
+    private static final BigDecimal ANNUAL_EXEMPT_PORTION = new BigDecimal("0.10");
 
     private final LoanPolicyProperties policy;
 
@@ -40,6 +44,7 @@ public class InterestCalculationService {
         LocalDate maturityDate = request.maturityDate();
         LocalDate referenceDate = request.referenceDate();
         BigDecimal balance = request.outstandingPrincipal();
+        BigDecimal partialRepaymentAmount = request.partialRepaymentAmount();
 
         int termMonths = (int) ChronoUnit.MONTHS.between(newDate, maturityDate);
         BigDecimal appliedRate = request.baseRate().add(request.spreadRate()).setScale(6, RoundingMode.HALF_UP);
@@ -56,19 +61,24 @@ public class InterestCalculationService {
         long prepaymentDays = Math.max(daysDiff, 0);
         long overdueDays = Math.max(-daysDiff, 0);
 
+        EarlyRepaymentFeeExemption exemption = determineExemption(balance, partialRepaymentAmount, newDate, referenceDate);
+        boolean withdrawalPeriodApplicable = isWithdrawalPeriodApplicable(newDate, referenceDate);
+
         List<RepaymentDueAmount> results = List.of(
                 buildResult(RepaymentType.EQUAL_PRINCIPAL_AND_INTEREST, balance, monthlyRate, appliedRate,
                         remainingInstallments, isLastInstallment, dueDate, prepaymentDays, overdueDays,
-                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate),
+                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate, partialRepaymentAmount, exemption),
                 buildResult(RepaymentType.EQUAL_PRINCIPAL, balance, monthlyRate, appliedRate,
                         remainingInstallments, isLastInstallment, dueDate, prepaymentDays, overdueDays,
-                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate),
+                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate, partialRepaymentAmount, exemption),
                 buildResult(RepaymentType.BULK, balance, monthlyRate, appliedRate,
                         remainingInstallments, isLastInstallment, dueDate, prepaymentDays, overdueDays,
-                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate)
+                        newDate, maturityDate, referenceDate, earlyRepaymentFeeRate, partialRepaymentAmount, exemption)
         );
 
-        return new InterestCalculationResponse(termMonths, appliedRate, earlyRepaymentFeeRate, results);
+        return new InterestCalculationResponse(
+                termMonths, appliedRate, earlyRepaymentFeeRate, exemption, withdrawalPeriodApplicable, results
+        );
     }
 
     private RepaymentDueAmount buildResult(
@@ -84,7 +94,9 @@ public class InterestCalculationService {
             LocalDate newDate,
             LocalDate maturityDate,
             LocalDate referenceDate,
-            BigDecimal earlyRepaymentFeeRate
+            BigDecimal earlyRepaymentFeeRate,
+            BigDecimal partialRepaymentAmount,
+            EarlyRepaymentFeeExemption exemption
     ) {
         BigDecimal interest = balance.multiply(monthlyRate).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
         BigDecimal principal = calculatePrincipal(type, balance, monthlyRate, remainingInstallments, isLastInstallment, interest);
@@ -107,7 +119,9 @@ public class InterestCalculationService {
                 : balance.multiply(appliedRate).multiply(BigDecimal.valueOf(prepaymentDays))
                         .divide(daysInYear, MONEY_SCALE, RoundingMode.HALF_UP);
 
-        BigDecimal earlyRepaymentFee = calculateEarlyRepaymentFee(balance, newDate, maturityDate, referenceDate, earlyRepaymentFeeRate);
+        BigDecimal earlyRepaymentFee = calculateEarlyRepaymentFee(
+                partialRepaymentAmount, newDate, maturityDate, referenceDate, earlyRepaymentFeeRate, exemption
+        );
 
         BigDecimal totalDueAmount = principal
                 .add(overduePrincipalInterest)
@@ -149,14 +163,46 @@ public class InterestCalculationService {
         };
     }
 
-    private BigDecimal calculateEarlyRepaymentFee(
+    /**
+     * ① 신규일자로부터 3년(1095일) 경과 시 전액 면제.
+     * ② 일부상환금액이 대출잔액의 연간 10% 이내이면 면제.
+     * 이 시뮬레이션은 과거 상환 이력을 추적하지 않으므로(계좌 개념 도입 전), ②는
+     * "이번 조회의 일부상환금액"만으로 판단한다 - 같은 해에 이미 다른 상환이 있었는지는 반영되지 않는다.
+     */
+    private EarlyRepaymentFeeExemption determineExemption(
             BigDecimal balance,
+            BigDecimal partialRepaymentAmount,
+            LocalDate newDate,
+            LocalDate referenceDate
+    ) {
+        long daysSinceOrigination = ChronoUnit.DAYS.between(newDate, referenceDate);
+        if (daysSinceOrigination >= THREE_YEARS_IN_DAYS) {
+            return EarlyRepaymentFeeExemption.THREE_YEARS_ELAPSED;
+        }
+
+        BigDecimal annualExemptThreshold = balance.multiply(ANNUAL_EXEMPT_PORTION);
+        if (partialRepaymentAmount.compareTo(annualExemptThreshold) <= 0) {
+            return EarlyRepaymentFeeExemption.ANNUAL_TEN_PERCENT;
+        }
+
+        return null;
+    }
+
+    /** 신규일자 기준 14일 이내 기준일자로 조회하면 청약철회 가능 기간에 해당한다. */
+    private boolean isWithdrawalPeriodApplicable(LocalDate newDate, LocalDate referenceDate) {
+        long daysSinceOrigination = ChronoUnit.DAYS.between(newDate, referenceDate);
+        return daysSinceOrigination >= 0 && daysSinceOrigination <= WITHDRAWAL_PERIOD_DAYS;
+    }
+
+    private BigDecimal calculateEarlyRepaymentFee(
+            BigDecimal partialRepaymentAmount,
             LocalDate newDate,
             LocalDate maturityDate,
             LocalDate referenceDate,
-            BigDecimal earlyRepaymentFeeRate
+            BigDecimal earlyRepaymentFeeRate,
+            EarlyRepaymentFeeExemption exemption
     ) {
-        if (!referenceDate.isBefore(maturityDate) || earlyRepaymentFeeRate.signum() == 0) {
+        if (exemption != null || !referenceDate.isBefore(maturityDate) || earlyRepaymentFeeRate.signum() == 0) {
             return BigDecimal.ZERO;
         }
         long remainingDays = ChronoUnit.DAYS.between(referenceDate, maturityDate);
@@ -164,7 +210,7 @@ public class InterestCalculationService {
         if (totalLoanDays <= 0) {
             return BigDecimal.ZERO;
         }
-        return balance.multiply(earlyRepaymentFeeRate)
+        return partialRepaymentAmount.multiply(earlyRepaymentFeeRate)
                 .multiply(BigDecimal.valueOf(remainingDays))
                 .divide(BigDecimal.valueOf(totalLoanDays), MONEY_SCALE, RoundingMode.HALF_UP);
     }
@@ -184,6 +230,9 @@ public class InterestCalculationService {
         }
         if (request.earlyRepaymentFeeRate() != null && request.earlyRepaymentFeeRate().signum() < 0) {
             throw new IllegalArgumentException("중도상환수수료율은 0 이상이어야 합니다.");
+        }
+        if (request.partialRepaymentAmount() == null || request.partialRepaymentAmount().signum() < 0) {
+            throw new IllegalArgumentException("일부상환금액은 0 이상이어야 합니다.");
         }
     }
 }
