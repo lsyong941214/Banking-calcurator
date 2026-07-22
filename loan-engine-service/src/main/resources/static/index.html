@@ -238,11 +238,11 @@
           <div class="field">
             <label>적용금리 (기준금리 + 가산금리)</label>
             <div class="rate-pair">
-              <input type="number" id="i-baseRate" step="0.01" placeholder="기준금리 %" />
+              <input type="text" inputmode="decimal" id="i-baseRate" placeholder="0.00%" />
               <span>+</span>
-              <input type="number" id="i-spreadRate" step="0.01" placeholder="가산금리 %" />
+              <input type="text" inputmode="decimal" id="i-spreadRate" placeholder="0.00%" />
               <span>=</span>
-              <input type="text" id="i-appliedRate" readonly placeholder="%" style="max-width:90px" />
+              <input type="text" id="i-appliedRate" readonly placeholder="0.00%" style="max-width:90px" />
             </div>
           </div>
           <div class="field">
@@ -252,7 +252,7 @@
           <div class="field">
             <label>중도상환수수료율 (%)</label>
             <div class="rate-pair">
-              <input type="number" id="i-feeRate" step="0.01" value="1" />
+              <input type="text" inputmode="decimal" id="i-feeRate" value="1" />
               <label class="checkbox-label"><input type="checkbox" id="i-feeExempt" /> 면제</label>
             </div>
           </div>
@@ -294,11 +294,11 @@
           <div class="field">
             <label>적용금리 (기준금리 + 가산금리)</label>
             <div class="rate-pair">
-              <input type="number" id="s-baseRate" step="0.01" placeholder="기준금리 %" />
+              <input type="text" inputmode="decimal" id="s-baseRate" placeholder="0.00%" />
               <span>+</span>
-              <input type="number" id="s-spreadRate" step="0.01" placeholder="가산금리 %" />
+              <input type="text" inputmode="decimal" id="s-spreadRate" placeholder="0.00%" />
               <span>=</span>
-              <input type="text" id="s-appliedRate" readonly placeholder="%" style="max-width:90px" />
+              <input type="text" id="s-appliedRate" readonly placeholder="0.00%" style="max-width:90px" />
             </div>
           </div>
           <div class="field">
@@ -351,6 +351,23 @@ function parseAmount(input) {
   return raw ? Number(raw) : NaN;
 }
 
+// 숫자와 소수점만 허용, 소수점 이하 2자리까지만 입력 가능
+function attachRateFormatting(input) {
+  input.addEventListener('input', () => {
+    let v = input.value.replace(/[^0-9.]/g, '');
+    const firstDot = v.indexOf('.');
+    if (firstDot !== -1) {
+      v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+      v = v.slice(0, firstDot + 3);
+    }
+    input.value = v;
+  });
+}
+
+function isoDate(d) {
+  return d.toISOString().slice(0, 10);
+}
+
 // ---------- Sidebar navigation ----------
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -367,6 +384,17 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   let activeType = 'EQUAL_PRINCIPAL_AND_INTEREST';
 
   attachAmountFormatting($('i-outstandingPrincipal'));
+  attachRateFormatting($('i-baseRate'));
+  attachRateFormatting($('i-spreadRate'));
+  attachRateFormatting($('i-feeRate'));
+
+  const today = new Date();
+  const maturityDefault = new Date(today);
+  maturityDefault.setFullYear(maturityDefault.getFullYear() + 1);
+  const referenceDefault = new Date(today);
+  referenceDefault.setMonth(referenceDefault.getMonth() + 1);
+  $('i-maturityDate').value = isoDate(maturityDefault);
+  $('i-referenceDate').value = isoDate(referenceDefault);
 
   function updateDerivedFields() {
     const term = monthsBetween($('i-newDate').value, $('i-maturityDate').value);
@@ -379,9 +407,16 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   ['i-newDate', 'i-maturityDate', 'i-baseRate', 'i-spreadRate'].forEach(id => {
     $(id).addEventListener('input', updateDerivedFields);
   });
+  updateDerivedFields();
 
   $('i-feeExempt').addEventListener('change', () => {
-    $('i-feeRate').disabled = $('i-feeExempt').checked;
+    if ($('i-feeExempt').checked) {
+      $('i-feeRate').value = '0';
+      $('i-feeRate').disabled = true;
+    } else {
+      $('i-feeRate').value = '1';
+      $('i-feeRate').disabled = false;
+    }
   });
 
   function renderResult(type) {
@@ -426,7 +461,7 @@ document.querySelectorAll('.nav-item').forEach(btn => {
       spreadRate: parseFloat($('i-spreadRate').value) / 100,
       outstandingPrincipal: parseAmount($('i-outstandingPrincipal')),
       referenceDate: $('i-referenceDate').value,
-      earlyRepaymentFeeRate: $('i-feeExempt').checked ? 0 : (parseFloat($('i-feeRate').value) / 100)
+      earlyRepaymentFeeRate: parseFloat($('i-feeRate').value) / 100
     };
 
     if (!payload.newDate || !payload.maturityDate || !payload.referenceDate ||
@@ -462,6 +497,12 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   let activeType = 'EQUAL_PRINCIPAL_AND_INTEREST';
 
   attachAmountFormatting($('s-principal'));
+  attachRateFormatting($('s-baseRate'));
+  attachRateFormatting($('s-spreadRate'));
+
+  const maturityDefault = new Date();
+  maturityDefault.setFullYear(maturityDefault.getFullYear() + 1);
+  $('s-maturityDate').value = isoDate(maturityDefault);
 
   function updateDerivedFields() {
     const term = monthsBetween($('s-newDate').value, $('s-maturityDate').value);
@@ -474,6 +515,7 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   ['s-newDate', 's-maturityDate', 's-baseRate', 's-spreadRate'].forEach(id => {
     $(id).addEventListener('input', updateDerivedFields);
   });
+  updateDerivedFields();
 
   function renderResult(type) {
     if (!lastResponse) return;
