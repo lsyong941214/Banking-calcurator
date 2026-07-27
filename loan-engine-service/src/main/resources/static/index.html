@@ -71,6 +71,35 @@
   .nav-item:hover { background: var(--color-surface); }
   .nav-item.active { background: var(--color-weak-bg); color: var(--color-weak-fg); }
 
+  /* --- Mobile hamburger + slide-in sidebar --- */
+  .hamburger-btn {
+    display: none;
+    position: fixed;
+    top: 16px; left: 16px;
+    z-index: 1100;
+    width: 44px; height: 44px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-btn-md);
+    background: var(--color-canvas);
+    cursor: pointer;
+  }
+  .hamburger-btn span {
+    display: block;
+    width: 20px; height: 2px;
+    background: var(--color-foreground);
+    border-radius: 1px;
+  }
+  .sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1040;
+  }
+
   /* --- Main content --- */
   .content { flex: 1; padding: var(--space-xxl) var(--space-xxl) 80px; max-width: 920px; }
   .view { display: none; }
@@ -220,14 +249,50 @@
   table.schedule-table tbody td:first-child,
   table.schedule-table tbody td:nth-child(2) { text-align: left; color: var(--color-body); }
   table.schedule-table tbody tr:last-child td { font-weight: 700; }
+
+  button.secondary {
+    margin-top: var(--space-lg);
+    background: var(--color-canvas);
+    color: var(--color-weak-fg);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-btn-lg);
+    height: 48px;
+    padding: 0 20px;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  button.secondary:hover { background: var(--color-weak-bg); }
+
+  /* Mobile overrides come last so they win over the base .sidebar/.content rules above */
+  @media (max-width: 768px) {
+    .hamburger-btn { display: flex; }
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 1050;
+      padding-top: 76px;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      box-shadow: 2px 0 16px rgba(0, 0, 0, 0.15);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-overlay.open { display: block; }
+    .content { padding-top: 76px; }
+  }
 </style>
 </head>
 <body>
+<button class="hamburger-btn" id="menuToggle" aria-label="메뉴 열기">
+  <span></span><span></span><span></span>
+</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="app-shell">
-  <nav class="sidebar">
+  <nav class="sidebar" id="sidebar">
     <div class="brand">대출계산기</div>
     <button class="nav-item active" data-view="interest">이자계산</button>
-    <button class="nav-item" data-view="schedule">상환스케줄 보기</button>
   </nav>
 
   <main class="content">
@@ -245,14 +310,14 @@
           </div>
           <div class="field">
             <label for="i-maturityDate">만기일자</label>
-            <input type="date" id="i-maturityDate" />
+            <input type="date" id="i-maturityDate" readonly placeholder="자동 계산" />
           </div>
           <div class="field">
-            <label for="i-termMonths">거치개월 (만기 - 신규)</label>
-            <input type="text" id="i-termMonths" readonly placeholder="자동 계산" />
+            <label for="i-loanTermYears">대출기간</label>
+            <select id="i-loanTermYears"></select>
           </div>
           <div class="field">
-            <label for="i-referenceDate">기준일자</label>
+            <label for="i-referenceDate">계산기준일자</label>
             <input type="date" id="i-referenceDate" />
           </div>
           <div class="field">
@@ -301,55 +366,8 @@
           <button class="tab-btn" data-type="BULK">만기일시상환</button>
         </div>
         <div id="i-resultArea"><div class="placeholder">좌측 입력 후 계산하기를 눌러주세요.</div></div>
-      </div>
-    </section>
-
-    <!-- ===================== 상환스케줄 보기 ===================== -->
-    <section id="view-schedule" class="view">
-      <h1>상환스케줄 보기</h1>
-
-      <div class="card">
-        <h2>입력</h2>
-        <div class="grid">
-          <div class="field">
-            <label for="s-newDate">신규일자</label>
-            <input type="date" id="s-newDate" />
-          </div>
-          <div class="field">
-            <label for="s-maturityDate">만기일자</label>
-            <input type="date" id="s-maturityDate" />
-          </div>
-          <div class="field">
-            <label for="s-termMonths">거치개월 (만기 - 신규)</label>
-            <input type="text" id="s-termMonths" readonly placeholder="자동 계산" />
-          </div>
-          <div class="field">
-            <label>적용금리 (기준금리 + 가산금리)</label>
-            <div class="rate-pair">
-              <input type="text" inputmode="decimal" id="s-baseRate" placeholder="0.00%" />
-              <span>+</span>
-              <input type="text" inputmode="decimal" id="s-spreadRate" placeholder="0.00%" />
-              <span>=</span>
-              <input type="text" id="s-appliedRate" readonly placeholder="0.00%" style="max-width:90px" />
-            </div>
-          </div>
-          <div class="field">
-            <label for="s-principal">대출원금 (원)</label>
-            <input type="text" inputmode="numeric" id="s-principal" placeholder="예: 100,000,000" />
-          </div>
-        </div>
-        <button class="primary" id="s-calcBtn">조회하기</button>
-        <div class="error" id="s-errorBox"></div>
-      </div>
-
-      <div class="card">
-        <h2>결과</h2>
-        <div class="tabs">
-          <button class="tab-btn active" data-type="EQUAL_PRINCIPAL_AND_INTEREST">원리금균등상환</button>
-          <button class="tab-btn" data-type="EQUAL_PRINCIPAL">원금균등상환</button>
-          <button class="tab-btn" data-type="BULK">만기일시상환</button>
-        </div>
-        <div id="s-resultArea"><div class="placeholder">좌측 입력 후 조회하기를 눌러주세요.</div></div>
+        <button type="button" class="secondary" id="i-scheduleToggleBtn">상환스케줄 미리보기</button>
+        <div id="i-scheduleArea" style="display:none; margin-top: var(--space-lg);"></div>
       </div>
     </section>
 
@@ -358,14 +376,6 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-
-function monthsBetween(a, b) {
-  if (!a || !b) return null;
-  const d1 = new Date(a), d2 = new Date(b);
-  let months = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
-  if (d2.getDate() < d1.getDate()) months -= 1;
-  return months;
-}
 
 function formatWon(v) {
   return Number(v).toLocaleString('ko-KR') + '원';
@@ -407,13 +417,33 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     btn.classList.add('active');
     $('view-' + btn.dataset.view).classList.add('active');
+    closeSidebar();
   });
 });
+
+// ---------- Mobile hamburger menu ----------
+const sidebarEl = $('sidebar');
+const sidebarOverlayEl = $('sidebarOverlay');
+
+function openSidebar() {
+  sidebarEl.classList.add('open');
+  sidebarOverlayEl.classList.add('open');
+}
+function closeSidebar() {
+  sidebarEl.classList.remove('open');
+  sidebarOverlayEl.classList.remove('open');
+}
+$('menuToggle').addEventListener('click', () => {
+  sidebarEl.classList.contains('open') ? closeSidebar() : openSidebar();
+});
+sidebarOverlayEl.addEventListener('click', closeSidebar);
 
 // ================= 이자계산 view =================
 (function () {
   let lastResponse = null;
   let activeType = 'EQUAL_PRINCIPAL_AND_INTEREST';
+  let lastScheduleResponse = null;
+  let scheduleVisible = false;
 
   attachAmountFormatting($('i-outstandingPrincipal'));
   attachAmountFormatting($('i-partialRepaymentAmount'));
@@ -435,6 +465,7 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     });
     activeType = type;
     renderResult(activeType);
+    if (scheduleVisible) renderSchedule(activeType);
   }
 
   function applyProductRestrictions() {
@@ -447,29 +478,60 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     }
   }
 
-  $('i-productType').addEventListener('change', applyProductRestrictions);
+  // 상품별 선택 가능한 대출기간: 주택담보대출(01)은 10/20/30/40년,
+  // 그 외 상품(02, 03)은 1/2년.
+  const PRODUCT_LOAN_TERM_YEARS = {
+    '01': [10, 20, 30, 40],
+    '02': [1, 2],
+    '03': [1, 2]
+  };
+
+  function populateLoanTermOptions() {
+    const years = PRODUCT_LOAN_TERM_YEARS[$('i-productType').value] || [1, 2];
+    const select = $('i-loanTermYears');
+    const prevValue = select.value;
+    select.innerHTML = years.map(y => `<option value="${y}">${y}년</option>`).join('');
+    select.value = years.includes(Number(prevValue)) ? prevValue : String(years[0]);
+  }
+
+  function recalcMaturityDate() {
+    const newDateVal = $('i-newDate').value;
+    const years = Number($('i-loanTermYears').value);
+    if (!newDateVal || !years) {
+      $('i-maturityDate').value = '';
+      return;
+    }
+    const d = new Date(newDateVal);
+    d.setFullYear(d.getFullYear() + years);
+    $('i-maturityDate').value = isoDate(d);
+  }
+
+  $('i-productType').addEventListener('change', () => {
+    applyProductRestrictions();
+    populateLoanTermOptions();
+    recalcMaturityDate();
+  });
+  $('i-loanTermYears').addEventListener('change', recalcMaturityDate);
+  $('i-newDate').addEventListener('input', recalcMaturityDate);
 
   const today = new Date();
-  const maturityDefault = new Date(today);
-  maturityDefault.setFullYear(maturityDefault.getFullYear() + 1);
   const referenceDefault = new Date(today);
   referenceDefault.setMonth(referenceDefault.getMonth() + 1);
-  $('i-maturityDate').value = isoDate(maturityDefault);
+  $('i-newDate').value = isoDate(today);
   $('i-referenceDate').value = isoDate(referenceDefault);
 
   function updateDerivedFields() {
-    const term = monthsBetween($('i-newDate').value, $('i-maturityDate').value);
-    $('i-termMonths').value = (term !== null && term > 0) ? term + ' 개월' : '';
-
     const base = parseFloat($('i-baseRate').value);
     const spread = parseFloat($('i-spreadRate').value);
     $('i-appliedRate').value = (!isNaN(base) && !isNaN(spread)) ? (base + spread).toFixed(2) + '%' : '';
   }
-  ['i-newDate', 'i-maturityDate', 'i-baseRate', 'i-spreadRate'].forEach(id => {
+  ['i-baseRate', 'i-spreadRate'].forEach(id => {
     $(id).addEventListener('input', updateDerivedFields);
   });
   updateDerivedFields();
   applyProductRestrictions();
+  populateLoanTermOptions();
+  recalcMaturityDate();
 
   $('i-feeExempt').addEventListener('change', () => {
     if ($('i-feeExempt').checked) {
@@ -519,6 +581,74 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.type));
   });
 
+  // ---------- 상환스케줄 미리보기 ----------
+  function renderSchedule(type) {
+    if (!lastScheduleResponse) return;
+    const r = lastScheduleResponse.results.find(x => x.repaymentType === type);
+    if (!r) return;
+
+    const rows = r.installments.map(row => `
+      <tr>
+        <td>${row.sequence}회</td>
+        <td>${row.dueDate}</td>
+        <td>${formatWon(row.principalPayment)}</td>
+        <td>${formatWon(row.interestPayment)}</td>
+        <td>${formatWon(row.totalPayment)}</td>
+        <td>${formatWon(row.remainingBalance)}</td>
+      </tr>
+    `).join('');
+
+    $('i-scheduleArea').innerHTML = `
+      <div class="meta">총 ${r.installments.length}회차</div>
+      <div class="schedule-table-wrap">
+        <table class="schedule-table">
+          <thead>
+            <tr><th>회차</th><th>납부일</th><th>원금</th><th>이자</th><th>납입액</th><th>잔액</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  async function fetchAndRenderSchedule() {
+    const payload = {
+      newDate: $('i-newDate').value,
+      maturityDate: $('i-maturityDate').value,
+      baseRate: parseFloat($('i-baseRate').value) / 100,
+      spreadRate: parseFloat($('i-spreadRate').value) / 100,
+      principal: parseAmount($('i-outstandingPrincipal'))
+    };
+
+    if (!payload.newDate || !payload.maturityDate ||
+        isNaN(payload.baseRate) || isNaN(payload.spreadRate) || isNaN(payload.principal)) {
+      $('i-scheduleArea').innerHTML = '<div class="error" style="display:block;">상환스케줄을 보려면 신규일자·만기일자·금리·대출잔액을 입력해주세요.</div>';
+      return;
+    }
+
+    $('i-scheduleArea').innerHTML = '<div class="placeholder">불러오는 중...</div>';
+    try {
+      const res = await fetch('/api/v1/repayment-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '상환스케줄 조회 중 오류가 발생했습니다.');
+      lastScheduleResponse = data;
+      renderSchedule(activeType);
+    } catch (e) {
+      $('i-scheduleArea').innerHTML = `<div class="error" style="display:block;">${e.message}</div>`;
+    }
+  }
+
+  $('i-scheduleToggleBtn').addEventListener('click', () => {
+    scheduleVisible = !scheduleVisible;
+    $('i-scheduleArea').style.display = scheduleVisible ? 'block' : 'none';
+    $('i-scheduleToggleBtn').textContent = scheduleVisible ? '상환스케줄 숨기기' : '상환스케줄 미리보기';
+    if (scheduleVisible) fetchAndRenderSchedule();
+  });
+
   $('i-calcBtn').addEventListener('click', async () => {
     $('i-errorBox').style.display = 'none';
     const payload = {
@@ -551,112 +681,12 @@ document.querySelectorAll('.nav-item').forEach(btn => {
       if (!res.ok) throw new Error(data.message || '계산 중 오류가 발생했습니다.');
       lastResponse = data;
       renderResult(activeType);
+      if (scheduleVisible) fetchAndRenderSchedule();
     } catch (e) {
       $('i-errorBox').textContent = e.message;
       $('i-errorBox').style.display = 'block';
     } finally {
       $('i-calcBtn').disabled = false;
-    }
-  });
-})();
-
-// ================= 상환스케줄 보기 view =================
-(function () {
-  let lastResponse = null;
-  let activeType = 'EQUAL_PRINCIPAL_AND_INTEREST';
-
-  attachAmountFormatting($('s-principal'));
-  attachRateFormatting($('s-baseRate'));
-  attachRateFormatting($('s-spreadRate'));
-
-  const maturityDefault = new Date();
-  maturityDefault.setFullYear(maturityDefault.getFullYear() + 1);
-  $('s-maturityDate').value = isoDate(maturityDefault);
-
-  function updateDerivedFields() {
-    const term = monthsBetween($('s-newDate').value, $('s-maturityDate').value);
-    $('s-termMonths').value = (term !== null && term > 0) ? term + ' 개월' : '';
-
-    const base = parseFloat($('s-baseRate').value);
-    const spread = parseFloat($('s-spreadRate').value);
-    $('s-appliedRate').value = (!isNaN(base) && !isNaN(spread)) ? (base + spread).toFixed(2) + '%' : '';
-  }
-  ['s-newDate', 's-maturityDate', 's-baseRate', 's-spreadRate'].forEach(id => {
-    $(id).addEventListener('input', updateDerivedFields);
-  });
-  updateDerivedFields();
-
-  function renderResult(type) {
-    if (!lastResponse) return;
-    const r = lastResponse.results.find(x => x.repaymentType === type);
-    if (!r) return;
-
-    const rows = r.installments.map(row => `
-      <tr>
-        <td>${row.sequence}회</td>
-        <td>${row.dueDate}</td>
-        <td>${formatWon(row.principalPayment)}</td>
-        <td>${formatWon(row.interestPayment)}</td>
-        <td>${formatWon(row.totalPayment)}</td>
-        <td>${formatWon(row.remainingBalance)}</td>
-      </tr>
-    `).join('');
-
-    $('s-resultArea').innerHTML = `
-      <div class="meta">총 ${r.installments.length}회차</div>
-      <div class="schedule-table-wrap">
-        <table class="schedule-table">
-          <thead>
-            <tr><th>회차</th><th>납부일</th><th>원금</th><th>이자</th><th>납입액</th><th>잔액</th></tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-  }
-
-  document.querySelectorAll('#view-schedule .tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#view-schedule .tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeType = btn.dataset.type;
-      renderResult(activeType);
-    });
-  });
-
-  $('s-calcBtn').addEventListener('click', async () => {
-    $('s-errorBox').style.display = 'none';
-    const payload = {
-      newDate: $('s-newDate').value,
-      maturityDate: $('s-maturityDate').value,
-      baseRate: parseFloat($('s-baseRate').value) / 100,
-      spreadRate: parseFloat($('s-spreadRate').value) / 100,
-      principal: parseAmount($('s-principal'))
-    };
-
-    if (!payload.newDate || !payload.maturityDate ||
-        isNaN(payload.baseRate) || isNaN(payload.spreadRate) || isNaN(payload.principal)) {
-      $('s-errorBox').textContent = '모든 입력값을 채워주세요.';
-      $('s-errorBox').style.display = 'block';
-      return;
-    }
-
-    $('s-calcBtn').disabled = true;
-    try {
-      const res = await fetch('/api/v1/repayment-schedules', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || '조회 중 오류가 발생했습니다.');
-      lastResponse = data;
-      renderResult(activeType);
-    } catch (e) {
-      $('s-errorBox').textContent = e.message;
-      $('s-errorBox').style.display = 'block';
-    } finally {
-      $('s-calcBtn').disabled = false;
     }
   });
 })();
