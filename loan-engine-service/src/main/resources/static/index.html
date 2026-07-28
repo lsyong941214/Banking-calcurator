@@ -266,6 +266,41 @@
   }
   button.secondary:hover { background: var(--color-weak-bg); }
 
+  .rate-pair input.applied-rate { font-weight: 700; color: var(--color-foreground); }
+
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -3px;
+    margin-right: 8px;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--color-canvas);
+    border-radius: var(--radius-card);
+    padding: var(--space-xl);
+    max-width: 360px;
+    width: calc(100% - 48px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  }
+  .modal-title { font-size: 17px; font-weight: 700; color: var(--color-foreground); margin-bottom: var(--space-md); }
+  .modal-message { font-size: 14px; color: var(--color-body); margin-bottom: var(--space-xl); white-space: pre-wrap; }
+  .modal button.primary { margin-top: 0; }
+
   /* Mobile overrides come last so they win over the base .sidebar/.content rules above */
   @media (max-width: 768px) {
     .hamburger-btn { display: flex; }
@@ -321,13 +356,13 @@
             <input type="date" id="i-referenceDate" />
           </div>
           <div class="field">
-            <label>적용금리 (기준금리 + 가산금리)</label>
+            <label>기준금리 + 가산금리 = 적용금리</label>
             <div class="rate-pair">
               <input type="text" inputmode="decimal" id="i-baseRate" placeholder="0.00%" />
               <span>+</span>
               <input type="text" inputmode="decimal" id="i-spreadRate" placeholder="0.00%" />
               <span>=</span>
-              <input type="text" id="i-appliedRate" readonly placeholder="0.00%" style="max-width:90px" />
+              <input type="text" class="applied-rate" id="i-appliedRate" disabled placeholder="0.00%" style="max-width:90px" />
             </div>
           </div>
           <div class="field">
@@ -355,7 +390,6 @@
           </div>
         </div>
         <button class="primary" id="i-calcBtn">계산하기</button>
-        <div class="error" id="i-errorBox"></div>
       </div>
 
       <div class="card">
@@ -372,6 +406,14 @@
     </section>
 
   </main>
+</div>
+
+<div class="modal-overlay" id="errorModalOverlay">
+  <div class="modal">
+    <div class="modal-title">오류</div>
+    <div class="modal-message" id="errorModalMessage"></div>
+    <button type="button" class="primary" id="errorModalCloseBtn">확인</button>
+  </div>
 </div>
 
 <script>
@@ -409,6 +451,19 @@ function attachRateFormatting(input) {
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
+
+// ---------- Error popup ----------
+function showErrorModal(message) {
+  $('errorModalMessage').textContent = message;
+  $('errorModalOverlay').classList.add('open');
+}
+function closeErrorModal() {
+  $('errorModalOverlay').classList.remove('open');
+}
+$('errorModalCloseBtn').addEventListener('click', closeErrorModal);
+$('errorModalOverlay').addEventListener('click', (e) => {
+  if (e.target === $('errorModalOverlay')) closeErrorModal();
+});
 
 // ---------- Sidebar navigation ----------
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -519,6 +574,7 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   referenceDefault.setMonth(referenceDefault.getMonth() + 1);
   $('i-newDate').value = isoDate(today);
   $('i-referenceDate').value = isoDate(referenceDefault);
+  $('i-partialRepaymentAmount').value = '0';
 
   function updateDerivedFields() {
     const base = parseFloat($('i-baseRate').value);
@@ -650,7 +706,7 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   });
 
   $('i-calcBtn').addEventListener('click', async () => {
-    $('i-errorBox').style.display = 'none';
+    const partialRepaymentAmountRaw = parseAmount($('i-partialRepaymentAmount'));
     const payload = {
       newDate: $('i-newDate').value,
       maturityDate: $('i-maturityDate').value,
@@ -659,18 +715,19 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
       outstandingPrincipal: parseAmount($('i-outstandingPrincipal')),
       referenceDate: $('i-referenceDate').value,
       earlyRepaymentFeeRate: parseFloat($('i-feeRate').value) / 100,
-      partialRepaymentAmount: parseAmount($('i-partialRepaymentAmount'))
+      partialRepaymentAmount: isNaN(partialRepaymentAmountRaw) ? 0 : partialRepaymentAmountRaw
     };
 
     if (!payload.newDate || !payload.maturityDate || !payload.referenceDate ||
-        isNaN(payload.baseRate) || isNaN(payload.spreadRate) || isNaN(payload.outstandingPrincipal) ||
-        isNaN(payload.partialRepaymentAmount)) {
-      $('i-errorBox').textContent = '모든 입력값을 채워주세요.';
-      $('i-errorBox').style.display = 'block';
+        isNaN(payload.baseRate) || isNaN(payload.spreadRate) || isNaN(payload.outstandingPrincipal)) {
+      showErrorModal('신규일자, 만기일자, 계산기준일자, 금리, 대출잔액을 모두 입력해주세요.');
       return;
     }
 
-    $('i-calcBtn').disabled = true;
+    const calcBtn = $('i-calcBtn');
+    const originalLabel = calcBtn.textContent;
+    calcBtn.disabled = true;
+    calcBtn.innerHTML = '<span class="spinner"></span>계산 중...';
     try {
       const res = await fetch('/api/v1/interest-calculations', {
         method: 'POST',
@@ -683,10 +740,10 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
       renderResult(activeType);
       if (scheduleVisible) fetchAndRenderSchedule();
     } catch (e) {
-      $('i-errorBox').textContent = e.message;
-      $('i-errorBox').style.display = 'block';
+      showErrorModal(e.message || '계산 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
-      $('i-calcBtn').disabled = false;
+      calcBtn.disabled = false;
+      calcBtn.textContent = originalLabel;
     }
   });
 })();
