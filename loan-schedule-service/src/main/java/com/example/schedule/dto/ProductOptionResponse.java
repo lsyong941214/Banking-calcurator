@@ -1,0 +1,11 @@
+package com.example.schedule.dto;
+
+import java.util.List;
+
+public record ProductOptionResponse(
+        String code,
+        String name,
+        List<String> allowedRepaymentTypes,
+        List<Integer> allowedLoanTermYears
+) {
+}

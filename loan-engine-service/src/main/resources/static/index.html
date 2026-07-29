@@ -452,6 +452,9 @@ function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
 
+// loan-schedule-service (코드 테이블 소유). 아직 별도 배포 전이라 로컬 주소로 고정 -- 배포되면 환경별 주소로 바꿔야 함.
+const CODE_SERVICE_BASE = 'http://localhost:8082';
+
 // ---------- Error popup ----------
 function showErrorModal(message) {
   $('errorModalMessage').textContent = message;
@@ -506,13 +509,24 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   attachRateFormatting($('i-spreadRate'));
   attachRateFormatting($('i-feeRate'));
 
-  // 상품별 선택 가능한 상환방식 제한: 주택담보대출(01)은 만기일시상환 불가,
-  // 전세자금대출(02)은 만기일시상환만 가능, 신용대출(03)은 전체 가능.
-  const PRODUCT_ALLOWED_TYPES = {
-    '01': ['EQUAL_PRINCIPAL_AND_INTEREST', 'EQUAL_PRINCIPAL'],
-    '02': ['BULK'],
-    '03': ['EQUAL_PRINCIPAL_AND_INTEREST', 'EQUAL_PRINCIPAL', 'BULK']
-  };
+  // loan-schedule-service가 DB(code_item/product_repayment_type_rule/product_loan_term_rule)를
+  // 소유한다. 여기 있는 값은 그 서비스에 못 닿을 때만 쓰는 폴백이며, 정상 응답이 오면
+  // loadProductCodesFromServer()가 즉시 덮어쓴다.
+  const DEFAULT_PRODUCT_OPTIONS = [
+    { code: '01', name: '주택담보대출', allowedRepaymentTypes: ['EQUAL_PRINCIPAL_AND_INTEREST', 'EQUAL_PRINCIPAL'], allowedLoanTermYears: [10, 20, 30, 40] },
+    { code: '02', name: '전세자금대출', allowedRepaymentTypes: ['BULK'], allowedLoanTermYears: [1, 2] },
+    { code: '03', name: '신용대출', allowedRepaymentTypes: ['EQUAL_PRINCIPAL_AND_INTEREST', 'EQUAL_PRINCIPAL', 'BULK'], allowedLoanTermYears: [1, 2] }
+  ];
+  const DEFAULT_REPAYMENT_TYPES = [
+    { code: 'EQUAL_PRINCIPAL_AND_INTEREST', name: '원리금균등상환' },
+    { code: 'EQUAL_PRINCIPAL', name: '원금균등상환' },
+    { code: 'BULK', name: '만기일시상환' }
+  ];
+  let productOptions = DEFAULT_PRODUCT_OPTIONS;
+
+  function getProductOption(productCode) {
+    return productOptions.find(p => p.code === productCode);
+  }
 
   function switchTab(type) {
     document.querySelectorAll('#view-interest .tab-btn').forEach(b => {
@@ -524,7 +538,8 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   }
 
   function applyProductRestrictions() {
-    const allowed = PRODUCT_ALLOWED_TYPES[$('i-productType').value] || [];
+    const option = getProductOption($('i-productType').value);
+    const allowed = option ? option.allowedRepaymentTypes : [];
     document.querySelectorAll('#view-interest .tab-btn').forEach(btn => {
       btn.disabled = !allowed.includes(btn.dataset.type);
     });
@@ -533,16 +548,47 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     }
   }
 
-  // 상품별 선택 가능한 대출기간: 주택담보대출(01)은 10/20/30/40년,
-  // 그 외 상품(02, 03)은 1/2년.
-  const PRODUCT_LOAN_TERM_YEARS = {
-    '01': [10, 20, 30, 40],
-    '02': [1, 2],
-    '03': [1, 2]
-  };
+  function applyRepaymentTypeLabels(repaymentTypes) {
+    repaymentTypes.forEach(rt => {
+      document.querySelectorAll(`.tab-btn[data-type="${rt.code}"]`).forEach(btn => {
+        btn.textContent = rt.name;
+      });
+    });
+  }
+
+  function renderProductTypeOptions() {
+    const select = $('i-productType');
+    const prevValue = select.value;
+    select.innerHTML = productOptions.map(p => `<option value="${p.code}">${p.name}</option>`).join('');
+    select.value = productOptions.some(p => p.code === prevValue) ? prevValue : productOptions[0].code;
+  }
+
+  function applyProductOptions(options) {
+    if (!Array.isArray(options) || options.length === 0) return;
+    productOptions = options;
+    renderProductTypeOptions();
+    applyProductRestrictions();
+    populateLoanTermOptions();
+    recalcMaturityDate();
+  }
+
+  async function loadProductCodesFromServer() {
+    try {
+      const [productRes, repaymentRes] = await Promise.all([
+        fetch(`${CODE_SERVICE_BASE}/api/v1/codes/product-options`),
+        fetch(`${CODE_SERVICE_BASE}/api/v1/codes/repayment-types`)
+      ]);
+      if (!productRes.ok || !repaymentRes.ok) throw new Error(`HTTP ${productRes.status}/${repaymentRes.status}`);
+      applyProductOptions(await productRes.json());
+      applyRepaymentTypeLabels(await repaymentRes.json());
+    } catch (e) {
+      console.warn('[loan-schedule-service] 상품/상환방식 코드 조회 실패 - 기본값을 계속 사용합니다:', e.message);
+    }
+  }
 
   function populateLoanTermOptions() {
-    const years = PRODUCT_LOAN_TERM_YEARS[$('i-productType').value] || [1, 2];
+    const option = getProductOption($('i-productType').value);
+    const years = (option && option.allowedLoanTermYears.length) ? option.allowedLoanTermYears : [1, 2];
     const select = $('i-loanTermYears');
     const prevValue = select.value;
     select.innerHTML = years.map(y => `<option value="${y}">${y}년</option>`).join('');
@@ -588,6 +634,7 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   applyProductRestrictions();
   populateLoanTermOptions();
   recalcMaturityDate();
+  loadProductCodesFromServer();
 
   $('i-feeExempt').addEventListener('change', () => {
     if ($('i-feeExempt').checked) {
