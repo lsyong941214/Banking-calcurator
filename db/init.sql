@@ -1,9 +1,10 @@
--- Code tables owned by loan-schedule-service.
+-- Code tables owned by loan-code-service.
 -- Applied once when the postgres container's data volume is first created
 -- (docker-entrypoint-initdb.d). No migration tool yet (demo project) -- if the
 -- schema changes, drop the volume and let this file re-run, or apply the diff
--- by hand. Ledger tables (loan_contract / repayment_schedule) are intentionally
--- not included yet -- see .claude/skills/banking-loan-calculator/SKILL.md.
+-- by hand. Ledger tables (loan_contract / repayment_schedule) are deferred --
+-- which service will own them is still undecided, see
+-- .claude/skills/banking-loan-calculator/SKILL.md.
 
 CREATE TABLE code_group (
     group_code VARCHAR(50) PRIMARY KEY,

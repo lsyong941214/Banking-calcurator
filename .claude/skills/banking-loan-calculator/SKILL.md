@@ -1,6 +1,6 @@
 ---
 name: banking-loan-calculator
-description: Reference design for the "금융개발" (financial development) work in this project — a Java/Spring Boot MSA loan calculation engine backed by PostgreSQL, plus its screens. Consult this whenever working in this repo on anything related to loans, interest/repayment calculation, loan-engine-service, loan-schedule-service, the loan_contract/repayment_schedule schema, the git commit/push workflow, or any screen/UI work (이자계산, 상환스케줄 보기, or new screens). Always check this skill before writing new Java classes, DB migrations, docker-compose changes, or HTML/CSS for a screen here, even if the request only mentions one small piece (e.g. "add a new repayment type", "fix the interest rounding", or "add a field to the screen") — it defines the conventions and design system the whole codebase must stay consistent with.
+description: Reference design for the "금융개발" (financial development) work in this project — a Java/Spring Boot MSA loan calculator, built deliberately as an MSA-practice project (not because the app needs MSA). Consult this whenever working in this repo on anything related to loans, interest/repayment calculation, loan-engine-service, loan-code-service, the code_item/product_*_rule schema (or the still-deferred loan_contract/repayment_schedule ledger), the git commit/push workflow, or any screen/UI work (이자계산, or new screens). Always check this skill before writing new Java classes, DB migrations, docker-compose changes, adding a new service module, or HTML/CSS for a screen here, even if the request only mentions one small piece (e.g. "add a new repayment type", "fix the interest rounding", or "add a field to the screen") — it defines the conventions and design system the whole codebase must stay consistent with.
 ---
 
 # 금융개발 — Loan Calculation MSA
@@ -31,62 +31,90 @@ to the user first.
 
 ## Architecture
 
-Two services, cleanly separated by responsibility:
+Two services today; a third (the ledger) is deferred and its home isn't decided yet.
 
 ```
-       [Client / Postman]
-               │
-               ▼
-   [Loan Schedule Service]  <--->  [PostgreSQL DB]
-               │  (internal API call)
-               ▼
-   [Loan Engine Service]   (pure math, stateless)
+              [Browser]
+             /         \
+            ▼           ▼
+   [Loan Engine        [Loan Code
+    Service]            Service]  <--->  [PostgreSQL]
+   (8081, no DB,        (8082, owns DB)
+    serves the UI)
 ```
 
-- **loan-engine-service** (port 8081): stateless REST API, pure repayment-method math.
-  No DB access, no persistence. Given principal/rate/term/method, returns a schedule.
-- **loan-schedule-service** (port 8082): owns persistence. Accepts loan applications,
-  calls loan-engine-service (OpenFeign or WebClient) to get the schedule, then saves
-  contract + schedule rows in one `@Transactional` write.
-- **PostgreSQL**: chosen specifically for `NUMERIC` precision and transactions —
-  required for money, never optional.
+- **loan-engine-service** (port 8081): stateless REST API + the static UI
+  (`src/main/resources/static/index.html`). Pure repayment-method math, no DB access, no
+  persistence. On page load, its UI calls loan-code-service for product/repayment-type/
+  loan-term valid values, falling back to hardcoded JS defaults if that call fails.
+- **loan-code-service** (port 8082): owns PostgreSQL. Currently serves only code-table
+  lookups (`GET /api/v1/codes/product-options`, `/repayment-types`) — the valid-value rules
+  that used to be hardcoded in the frontend JS. **Renamed from `loan-schedule-service` on
+  2026-07-29** once "schedule" turned out to oversell what it actually does (it doesn't touch
+  the 상환스케줄 미리보기 feature at all — that's pure calculation inside loan-engine-service).
+  Whichever service ends up owning the ledger (`loan_contract`/`repayment_schedule`, still
+  deferred) may or may not be this one — that's genuinely undecided, don't assume it and don't
+  build it without asking first.
+- **PostgreSQL**: chosen specifically for `NUMERIC` precision and transactions — required for
+  money, never optional, even though nothing money-shaped is persisted yet.
 
-Recommended module layout:
+**This is a deliberate MSA-practice project, not a "needs MSA" production app.** The split
+exists so the user can practice modifying/building/deploying services independently — not
+because traffic or team scale demands it. Don't suggest collapsing it back into one service.
+Do keep any new capability (e.g. a hypothetical future 계좌조회 feature) in its own new sibling
+module under `int_calc/` (own `pom.xml`, own build/deploy) rather than folded into an existing
+service — that boundary is the point of the exercise.
+
+Actual module layout:
 
 ```
-loan-msa-project/
-├── docker-compose.yml
+int_calc/
+├── docker-compose.yml          # local Postgres (postgres:15-alpine), seeded by db/init.sql
+├── db/init.sql                 # code tables' schema + seed data (no migration tool -- demo project)
 ├── loan-engine-service/        # port 8081
-│   └── src/main/java/com/example/engine/
-│       ├── controller/         # POST /api/v1/calculate
-│       └── service/            # repayment-method algorithms
-└── loan-schedule-service/      # port 8082
-    └── src/main/java/com/example/schedule/
-        ├── controller/         # POST /api/v1/loans
-        ├── client/             # OpenFeign / WebClient → engine service
-        ├── domain/             # LoanContract, RepaymentSchedule JPA entities
+│   ├── src/main/java/com/example/engine/
+│   │   ├── controller/         # POST /api/v1/interest-calculations, /repayment-schedules
+│   │   └── service/            # repayment-method algorithms
+│   └── src/main/resources/static/index.html   # the entire UI
+└── loan-code-service/          # port 8082
+    └── src/main/java/com/example/code/
+        ├── controller/         # GET /api/v1/codes/*
+        ├── service/            # ProductOptionService (assembles per-product bundles)
+        ├── domain/             # CodeGroup, CodeItem, ProductRepaymentTypeRule, ProductLoanTermRule
         └── repository/         # Spring Data JPA repositories
 ```
 
 ## Database schema
 
-Full DDL: [references/schema.sql](references/schema.sql). Two tables:
+**Implemented now** (owned by `loan-code-service`): [../../../db/init.sql](../../../db/init.sql)
+at the repo root — `code_group` + `code_item` (grouped valid values: `PRODUCT_TYPE`,
+`REPAYMENT_TYPE`), plus two flat rule tables, `product_repayment_type_rule` and
+`product_loan_term_rule`, mapping which repayment types / loan terms are valid per product.
+No FK from the rule tables to `code_item` (kept simple for a demo), and no migration tool —
+schema changes go straight into `db/init.sql`; applying a change to an existing local DB means
+dropping the docker volume (or hand-applying the diff) rather than a versioned migration.
 
-- `loan_contract` — one row per loan (principal, annual_rate, term_months,
-  repayment_type, start_date).
-- `repayment_schedule` — one row per installment, FK to `loan_contract`.
+**Deferred, sketch only** (not built): [references/schema.sql](references/schema.sql) — the
+original `loan_contract`/`repayment_schedule` ledger design (one row per loan, one row per
+installment, FK'd together). The user confirmed this comes later; don't build it unless asked,
+and don't assume it lands in `loan-code-service` just because that was the plan under the old
+`loan-schedule-service` name — that's still an open decision.
 
-**Every money or rate column is `NUMERIC`, never `FLOAT`/`DOUBLE`.** This is
-non-negotiable for financial data — floating point drift compounds across months
-and produces balances that don't reconcile to zero at maturity.
+**Every money or rate column must be `NUMERIC`, never `FLOAT`/`DOUBLE`**, once the ledger
+exists — non-negotiable for financial data, floating point drift compounds across months and
+produces balances that don't reconcile to zero at maturity.
 
-`repayment_type` is one of `EQUAL_PRINCIPAL_AND_INTEREST` (원리금균등),
-`EQUAL_PRINCIPAL` (원금균등), or `BULK` (만기일시) — the engine must support all three
-with the same rigor, not just the first one.
+`repayment_type` is one of `EQUAL_PRINCIPAL_AND_INTEREST` (원리금균등), `EQUAL_PRINCIPAL`
+(원금균등), or `BULK` (만기일시) — already reflected in `code_item` seed data and required with
+the same rigor (not just the first case) in `loan-engine-service`'s calculation logic.
 
-Local DB comes up via `docker-compose up -d` using
-[references/docker-compose.yml](references/docker-compose.yml) (postgres:15-alpine,
-db `loandb`, mounts `init.sql` from the schema above for auto-init).
+Local DB comes up via `docker-compose up -d` at the repo root (postgres:15-alpine, db `loandb`,
+mounts `db/init.sql`). **This dev Mac doesn't have Docker installed** — verified the schema and
+`loan-code-service` end-to-end via a manually-started Homebrew `postgresql@15` instance instead
+(same `loandb`/`loanuser`/`loanpassword` creds as `docker-compose.yml`, so switching to real
+Docker later needs no config changes; check `pg_isready -p 5432` before assuming it's still up
+in a new session). Production DB is planned to be a managed Postgres add-on (e.g. Render's),
+not a self-hosted container.
 
 ## Java calculation rules
 
@@ -119,7 +147,8 @@ Non-negotiable rules, because this is money:
 
 ## UI / screen design
 
-Every screen in this project (이자계산, 상환스케줄 보기, and any new ones) follows the design
+Every screen in this project (이자계산 — including its inline 상환스케줄 미리보기 panel — and any
+new ones) follows the design
 tokens in [DESIGN.md](../../../DESIGN.md) at the repo root — a verified Toss TDS Mobile
 reference (colors, typography, spacing, radius, component states). Read it before styling
 anything, and treat its tokens as the single source of truth rather than inventing new
@@ -142,17 +171,18 @@ for any new screen instead of redefining the palette.
 
 ## Development roadmap
 
-1. `docker-compose up -d` to bring up PostgreSQL.
-2. Build `loan-engine-service`: port the three methods from `LoanCalculator.java`,
-   write unit tests that assert the schedule reconciles (sum of principal payments
-   == original principal, final balance == 0), then expose via REST controller.
-3. Build `loan-schedule-service`: JPA entities + repositories for the two tables,
-   Feign/WebClient client to call the engine service, and a `@Transactional` loan
-   application endpoint that persists contract + full schedule together.
-4. Verify end-to-end with Postman/curl: create a loan, confirm the persisted schedule
-   in Postgres matches what the engine returned, and that balances zero out exactly
-   at the last row.
+Status as of 2026-07-29:
 
-When picking up new work here, check which roadmap step the repo is currently at
-(e.g. does `loan-engine-service` exist yet, does it have all three repayment
-methods, is `loan-schedule-service` wired to it) before assuming the next step.
+1. ✅ `loan-engine-service` — grown well past the original three-method sketch: product
+   types, early-repayment-fee exemption rules, mobile nav drawer, an inline 상환스케줄 미리보기
+   panel (calls its own `/api/v1/repayment-schedules`, no DB involved).
+2. ✅ `loan-code-service` — owns Postgres, serves product/repayment-type/loan-term code
+   tables to `loan-engine-service`'s UI (with a hardcoded-JS fallback if it's unreachable).
+   Runs locally only; not deployed anywhere yet (Render only hosts `loan-engine-service`).
+3. ❌ Not started: the ledger (`loan_contract`/`repayment_schedule` persistence, owner TBD),
+   auth/per-user screen permissions, a migration tool, deploying `loan-code-service`, and
+   extending `.git/hooks/post-commit` to rebuild `loan-code-service` too (it currently only
+   watches `loan-engine-service/`).
+
+When picking up new work here, check which of these is actually true in the repo before
+assuming the next step — don't trust an older draft of this list over what you actually find.
