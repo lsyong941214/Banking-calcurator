@@ -1,10 +1,10 @@
-package com.example.engine.service;
+package com.example.schedule.service;
 
-import com.example.engine.domain.RepaymentType;
-import com.example.engine.dto.RepaymentScheduleRequest;
-import com.example.engine.dto.RepaymentScheduleResponse;
-import com.example.engine.dto.RepaymentScheduleTypeResult;
-import com.example.engine.dto.ScheduleInstallment;
+import com.example.schedule.domain.RepaymentType;
+import com.example.schedule.dto.RepaymentScheduleRequest;
+import com.example.schedule.dto.RepaymentScheduleResponse;
+import com.example.schedule.dto.RepaymentScheduleTypeResult;
+import com.example.schedule.dto.ScheduleInstallment;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;

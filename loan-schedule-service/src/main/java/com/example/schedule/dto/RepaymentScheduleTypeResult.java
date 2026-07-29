@@ -1,6 +1,6 @@
-package com.example.engine.dto;
+package com.example.schedule.dto;
 
-import com.example.engine.domain.RepaymentType;
+import com.example.schedule.domain.RepaymentType;
 
 import java.util.List;
 

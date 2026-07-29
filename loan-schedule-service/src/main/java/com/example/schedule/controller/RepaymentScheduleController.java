@@ -1,8 +1,8 @@
-package com.example.engine.controller;
+package com.example.schedule.controller;
 
-import com.example.engine.dto.RepaymentScheduleRequest;
-import com.example.engine.dto.RepaymentScheduleResponse;
-import com.example.engine.service.RepaymentScheduleService;
+import com.example.schedule.dto.RepaymentScheduleRequest;
+import com.example.schedule.dto.RepaymentScheduleResponse;
+import com.example.schedule.service.RepaymentScheduleService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;

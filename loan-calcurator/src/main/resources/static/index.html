@@ -452,8 +452,17 @@ function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
 
-// loan-code-service (코드 테이블 소유). 아직 별도 배포 전이라 로컬 주소로 고정 -- 배포되면 환경별 주소로 바꿔야 함.
-const CODE_SERVICE_BASE = 'http://localhost:8082';
+// 이 화면(loan-calcurator)은 정적 화면만 서빙하고, 실제 업무 로직은 전부 아래 3개
+// 서비스를 직접 호출해서 처리한다 (업무기능별 서비스 분리).
+//   - loan-engine-service   : 이자계산 (입력 -> 계산 -> 결과 반환)
+//   - loan-schedule-service : 상환스케줄 미리보기 생성
+//   - loan-code-service     : 화면 on_load 시 상품/상환방식/대출기간 유효값 조회 (DB)
+// 로컬에서는 포트로 구분해서 띄운다. TODO: loan-engine/schedule/code-service를 각각
+// Render에 배포하면 아래 두 번째 값을 실제 배포 주소로 바꿔야 한다.
+const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const ENGINE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8081' : 'https://TODO-loan-engine-service.onrender.com';
+const SCHEDULE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8083' : 'https://TODO-loan-schedule-service.onrender.com';
+const CODE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8082' : 'https://TODO-loan-code-service.onrender.com';
 
 // ---------- Error popup ----------
 function showErrorModal(message) {
@@ -731,7 +740,7 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
 
     $('i-scheduleArea').innerHTML = '<div class="placeholder">불러오는 중...</div>';
     try {
-      const res = await fetch('/api/v1/repayment-schedules', {
+      const res = await fetch(`${SCHEDULE_SERVICE_BASE}/api/v1/repayment-schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -776,7 +785,7 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     calcBtn.disabled = true;
     calcBtn.innerHTML = '<span class="spinner"></span>계산 중...';
     try {
-      const res = await fetch('/api/v1/interest-calculations', {
+      const res = await fetch(`${ENGINE_SERVICE_BASE}/api/v1/interest-calculations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
