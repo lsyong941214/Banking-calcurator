@@ -1,0 +1,48 @@
+# Render Blueprint: creates the 3 backend services called by loan-calcurator
+# (already deployed separately as the pre-existing "Banking-calcurator" service).
+# loan-code-service's DB is Supabase Postgres, not a Render-managed database --
+# SPRING_DATASOURCE_USERNAME/PASSWORD are marked sync:false so Render prompts for
+# them during blueprint apply instead of storing the password in this file.
+services:
+  - type: web
+    name: loan-engine-service
+    runtime: docker
+    plan: free
+    rootDir: loan-engine-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: https://banking-calcurator.onrender.com
+
+  - type: web
+    name: loan-schedule-service
+    runtime: docker
+    plan: free
+    rootDir: loan-schedule-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: https://banking-calcurator.onrender.com
+
+  - type: web
+    name: loan-code-service
+    runtime: docker
+    plan: free
+    rootDir: loan-code-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: https://banking-calcurator.onrender.com
+      - key: SPRING_DATASOURCE_HOST
+        value: aws-0-ap-northeast-1.pooler.supabase.com
+      - key: SPRING_DATASOURCE_PORT
+        value: 5432
+      - key: SPRING_DATASOURCE_DB
+        value: postgres
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
