@@ -460,9 +460,9 @@ function isoDate(d) {
 // 로컬에서는 포트로 구분해서 띄운다. TODO: loan-engine/schedule/code-service를 각각
 // Render에 배포하면 아래 두 번째 값을 실제 배포 주소로 바꿔야 한다.
 const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-const ENGINE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8081' : 'https://TODO-loan-engine-service.onrender.com';
-const SCHEDULE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8083' : 'https://TODO-loan-schedule-service.onrender.com';
-const CODE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8082' : 'https://TODO-loan-code-service.onrender.com';
+const ENGINE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8081' : 'https://loan-engine-service.onrender.com';
+const SCHEDULE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8083' : 'https://loan-schedule-service.onrender.com';
+const CODE_SERVICE_BASE = IS_LOCAL ? 'http://localhost:8082' : 'https://loan-code-service.onrender.com';
 
 // ---------- Error popup ----------
 function showErrorModal(message) {
