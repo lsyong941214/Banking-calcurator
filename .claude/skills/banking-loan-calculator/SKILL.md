@@ -1,6 +1,6 @@
 ---
 name: banking-loan-calculator
-description: Reference design for the "금융개발" (financial development) work in this project — a Java/Spring Boot MSA loan calculator, built deliberately as an MSA-practice project (not because the app needs MSA), split strictly by business function. Consult this whenever working in this repo on anything related to loans, interest/repayment calculation, loan-calcurator, loan-engine-service, loan-schedule-service, loan-code-service, the code_item/product_*_rule schema (or the still-deferred loan_contract/repayment_schedule ledger), the git commit/push workflow, or any screen/UI work. Always check this skill before writing new Java classes, DB migrations, docker-compose changes, adding a new service module, or HTML/CSS for a screen here, even if the request only mentions one small piece (e.g. "add a new repayment type", "fix the interest rounding", or "add a field to the screen") — it defines the conventions and design system the whole codebase must stay consistent with.
+description: Reference design for the "금융개발" (financial development) work in this project — a Java/Spring Boot MSA loan calculator, built deliberately as an MSA-practice project (not because the app needs MSA), split strictly by business function. Consult this whenever working in this repo on anything related to loans, interest/repayment calculation, loan-calcurator, loan-engine-service, loan-schedule-service, loan-code-service, loan-ledger-service, the code_item/product_*_rule schema, the lon_acct_base ledger, the git commit/push workflow, or any screen/UI work. Always check this skill before writing new Java classes, DB migrations, docker-compose changes, adding a new service module, or HTML/CSS for a screen here, even if the request only mentions one small piece (e.g. "add a new repayment type", "fix the interest rounding", or "add a field to the screen") — it defines the conventions and design system the whole codebase must stay consistent with.
 ---
 
 # 금융개발 — Loan Calculation MSA
@@ -28,39 +28,48 @@ to the user first.
   is actually live at that address depends on whether/how the Render service's root
   directory has been repointed — check before assuming it shows a working screen.
   Deploying `loan-calcurator` (and giving `loan-engine-service`/`loan-schedule-service`/
-  `loan-code-service` their own Render services) requires the Render dashboard — no
-  API token or CLI is set up in this environment, so that step needs the user or a
-  connected browser session, not a git push alone.
+  `loan-code-service`/`loan-ledger-service` their own Render services, all 4 of which are
+  now defined in `render.yaml`) requires the Render dashboard — no API token or CLI is
+  set up in this environment, so that step needs the user or a connected browser session,
+  not a git push alone. There's also no Supabase CLI/API token here — `db/init_ledger.sql`
+  was applied to the Supabase project directly via `psql` with a password the user
+  provided in chat, not through any stored credential.
 - **Auto-restart on commit**: `.git/hooks/post-commit` (source tracked at
   `scripts/git-hooks/post-commit`, since git doesn't version `.git/hooks/`) rebuilds
   and restarts the locally-running `loan-engine-service` in the background whenever a
   commit touches that directory. **It does not yet watch `loan-calcurator/`,
-  `loan-schedule-service/`, or `loan-code-service/`** — restart those manually
-  (`./mvnw -q -B clean package -DskipTests && java -jar target/*.jar`) after pulling
-  changes that touch them, or extend the hook if this becomes annoying.
+  `loan-schedule-service/`, `loan-code-service/`, or `loan-ledger-service/`** — restart
+  those manually (`./mvnw -q -B clean package -DskipTests && java -jar target/*.jar`)
+  after pulling changes that touch them, or extend the hook if this becomes annoying.
 
 ## Architecture
 
-Four units today, strictly split by business function — not by technical layer (see
+Five units today, strictly split by business function — not by technical layer (see
 below for why that distinction matters here):
 
 ```
-                         [Browser: loan-calcurator, 8080]
-                          (static screen only, no logic)
-                    /              |                 \
-                   ▼               ▼                  ▼
-     [loan-engine-service   [loan-schedule-service  [loan-code-service
-      8081, no DB]           8083, no DB]            8082, owns PostgreSQL]
-      이자계산 only            상환스케줄 미리보기 only    상품/상환방식/대출기간
-                                                       유효값 조회
+                              [Browser: loan-calcurator, 8080]
+                               (static screen only, no logic)
+                    /              |                 \                 \
+                   ▼               ▼                  ▼                  ▼
+     [loan-engine-service   [loan-schedule-service  [loan-code-service  [loan-ledger-service
+      8081, no DB]           8083, no DB]            8082, owns          8084, owns Postgres
+      이자계산 only            상환스케줄 미리보기 only    PostgreSQL]         (same Supabase
+                                                       상품/상환방식/       instance as
+                                                       대출기간 유효값 조회  loan-code-service)]
+                                                                          원장조회
+                                                                          (lon_acct_base) only
 ```
 
 - **loan-calcurator** (port 8080): the entire UI, and *only* the UI — static HTML/CSS/JS
   (`src/main/resources/static/index.html`), no business logic, no DB. On load it calls
   loan-code-service for valid values; on "계산하기" it calls loan-engine-service; on
-  "상환스케줄 미리보기" it calls loan-schedule-service. All three calls are cross-origin
-  from the browser (different ports/hosts), so each of the three backend services needs
-  CORS configured for whatever origin the screen is served from.
+  "상환스케줄 미리보기" it calls loan-schedule-service; on "원장조회" it calls
+  loan-ledger-service, and its "이자계산에 사용" button copies a looked-up account's
+  dates/rates/balance/repayment method straight into the 이자계산 form so the two screens
+  work together without a shared backend. All four calls are cross-origin from the browser
+  (different ports/hosts), so each of the four backend services needs CORS configured for
+  whatever origin the screen is served from.
 - **loan-engine-service** (port 8081): stateless REST API, **이자계산 only** — given
   newDate/maturityDate/rates/principal/etc., returns the interest/fee breakdown for all
   three repayment methods. No DB, no UI, nothing else. Don't add schedule generation or
@@ -73,13 +82,15 @@ below for why that distinction matters here):
   belongs bundled with 이자계산.
 - **loan-code-service** (port 8082): owns PostgreSQL. Serves code-table lookups
   (`GET /api/v1/codes/product-options`, `/repayment-types`) — valid-value rules that used
-  to be hardcoded in the frontend JS. **This is not the ledger.** Whichever service (if
-  any) ends up owning the future ledger (`loan_contract`/`repayment_schedule`) is still
-  undecided — don't assume it's this one, and don't assume it's `loan-schedule-service`
-  either just because the name sounds right; that name is already spoken for by the
-  stateless schedule-preview calculator above. Ask before building the ledger.
+  to be hardcoded in the frontend JS. **This is not the ledger.**
+- **loan-ledger-service** (port 8084): owns the `lon_acct_base` (대출계좌원장) table on the
+  same Postgres instance as loan-code-service. Serves `GET /api/v1/ledger/accounts` (with
+  an optional `keyword` filter matched against `acct_no`/`cust_no`) — **원장조회 only**, no
+  write endpoints, no other business function. Added 2026-08-02 as the answer to the
+  "which service owns the ledger?" question this file used to leave open — see Database
+  schema below for how `lon_acct_base` relates to the older deferred ledger sketch.
 - **PostgreSQL**: chosen specifically for `NUMERIC` precision and transactions — required
-  for money, never optional, even though nothing money-shaped is persisted yet.
+  for money, never optional.
 
 **Why business-function splitting, not technical-layer splitting:** an earlier version of
 this project split `loan-schedule-service` off purely because it "had a DB" while
@@ -87,10 +98,10 @@ this project split `loan-schedule-service` off purely because it "had a DB" whil
 persistence) rather than a business one. That's a known MSA anti-pattern: the two pieces
 still change together, deploying one without the other has no real benefit, and it adds a
 chatty network hop for no reason. The correct cut, confirmed with the user 2026-07-29, is
-by business capability — 이자계산, 상환스케줄 미리보기, and 코드값 조회 are each their own
-service regardless of whether they touch a database. Keep using that test (`does this
-represent a distinct business capability?`, not `does this need a DB?`) for any future
-service split, e.g. a hypothetical 계좌조회 feature.
+by business capability — 이자계산, 상환스케줄 미리보기, 코드값 조회, and (since 2026-08-02)
+원장조회 are each their own service regardless of whether they touch a database. Keep using
+that test (`does this represent a distinct business capability?`, not `does this need a
+DB?`) for any future service split.
 
 **This is a deliberate MSA-practice project, not a "needs MSA" production app.** The split
 exists so the user can practice modifying/building/deploying services independently — not
@@ -102,8 +113,9 @@ Actual module layout:
 
 ```
 int_calc/
-├── docker-compose.yml            # local Postgres (postgres:15-alpine), seeded by db/init.sql
+├── docker-compose.yml            # local Postgres (postgres:15-alpine), seeded by db/init.sql + db/init_ledger.sql
 ├── db/init.sql                   # loan-code-service's schema + seed data (no migration tool -- demo project)
+├── db/init_ledger.sql            # loan-ledger-service's schema (lon_acct_base) + seed data
 ├── loan-calcurator/               # port 8080 -- screen only
 │   └── src/main/resources/static/index.html
 ├── loan-engine-service/          # port 8081 -- 이자계산 only
@@ -116,12 +128,19 @@ int_calc/
 │       ├── controller/           # POST /api/v1/repayment-schedules
 │       ├── service/              # RepaymentScheduleService (amortization schedule generation)
 │       └── config/               # CorsConfig
-└── loan-code-service/            # port 8082 -- owns Postgres
-    └── src/main/java/com/example/code/
-        ├── controller/           # GET /api/v1/codes/*
-        ├── service/              # ProductOptionService (assembles per-product bundles)
-        ├── domain/               # CodeGroup, CodeItem, ProductRepaymentTypeRule, ProductLoanTermRule
-        ├── repository/           # Spring Data JPA repositories
+├── loan-code-service/            # port 8082 -- owns Postgres
+│   └── src/main/java/com/example/code/
+│       ├── controller/           # GET /api/v1/codes/*
+│       ├── service/              # ProductOptionService (assembles per-product bundles)
+│       ├── domain/               # CodeGroup, CodeItem, ProductRepaymentTypeRule, ProductLoanTermRule
+│       ├── repository/           # Spring Data JPA repositories
+│       └── config/               # CorsConfig
+└── loan-ledger-service/          # port 8084 -- owns lon_acct_base on the same Postgres/Supabase
+    └── src/main/java/com/example/ledger/
+        ├── controller/           # GET /api/v1/ledger/accounts?keyword=
+        ├── service/              # LedgerAccountService
+        ├── domain/               # LonAcctBase, LonAcctBaseId (composite key: acctNo+acctSeqNo)
+        ├── repository/           # LonAcctBaseRepository
         └── config/               # CorsConfig
 ```
 
@@ -135,16 +154,34 @@ No FK from the rule tables to `code_item` (kept simple for a demo), and no migra
 schema changes go straight into `db/init.sql`; applying a change to an existing local DB means
 dropping the docker volume (or hand-applying the diff) rather than a versioned migration.
 
-**Deferred, sketch only** (not built): [references/schema.sql](references/schema.sql) — the
-original `loan_contract`/`repayment_schedule` ledger design (one row per loan, one row per
-installment, FK'd together). The user confirmed this comes later; don't build it unless asked.
-Its owner is genuinely undecided — it is **not** automatically `loan-code-service`, and it is
-**not** `loan-schedule-service` (that name now belongs to the stateless schedule-preview
-calculator). It may end up being a brand new service — ask before deciding.
+**Implemented now** (owned by `loan-ledger-service`): [../../../db/init_ledger.sql](../../../db/init_ledger.sql)
+at the repo root — `lon_acct_base` (대출계좌원장), PK'd on `(acct_no, acct_seq_no)` because
+`acct_no` alone isn't unique (중도금대출 등 회차별로 같은 계좌번호 아래 여러 `acct_seq_no`가 붙는다).
+Money columns (`loan_limit_amt`, `loan_bal_amt`) are `NUMERIC(15,0)` (whole won, matching
+`loan-engine-service`'s `MONEY_SCALE = 0`); rate columns (`base_rate`, `add_rate`,
+`apply_rate`, `early_repay_fee_rate`) are `NUMERIC(8,6)` decimal fractions (e.g. `0.035000`
+= 3.5%), matching `appliedRate`'s `setScale(6, ...)` in `InterestCalculationService`. Date
+columns are `VARCHAR(8)` `YYYYMMDD` strings by design (원장 시스템 정합성), not SQL `DATE`.
+`acct_stat_cd`/`item_cd`/`repay_method_cd` are `CHECK`-constrained and documented via
+`COMMENT ON COLUMN`. No audit columns (`created_at`/`updated_at`) — kept consistent with
+`code_item`/`code_group`, which don't have them either.
 
-**Every money or rate column must be `NUMERIC`, never `FLOAT`/`DOUBLE`**, once the ledger
-exists — non-negotiable for financial data, floating point drift compounds across months and
-produces balances that don't reconcile to zero at maturity.
+This **is** the ledger the rest of this file used to describe as deferred with an undecided
+owner — resolved 2026-08-02: `loan-ledger-service` owns it. Note it is a different, simpler
+shape than the sketch below (single table, not two FK'd tables) — the sketch was written
+before real requirements existed and is now superseded for the account-level ledger. It may
+still be relevant later if per-installment history (one row per payment) is needed, which
+`lon_acct_base` does not attempt to track.
+
+**Deferred, sketch only** (not built): [references/schema.sql](references/schema.sql) — the
+original `loan_contract`/`repayment_schedule` design (one row per loan, one row per
+installment, FK'd together) for per-installment payment history. Superseded for
+account-level data by `lon_acct_base` above; only build this if per-installment history is
+actually needed later, and ask which service should own it before doing so.
+
+**Every money or rate column must be `NUMERIC`, never `FLOAT`/`DOUBLE`** — non-negotiable for
+financial data, floating point drift compounds across months and produces balances that
+don't reconcile to zero at maturity.
 
 `repayment_type` is one of `EQUAL_PRINCIPAL_AND_INTEREST` (원리금균등), `EQUAL_PRINCIPAL`
 (원금균등), or `BULK` (만기일시) — reflected in `code_item` seed data, and required with the
@@ -153,12 +190,18 @@ calculation logic (each keeps its own small copy of the `RepaymentType` enum —
 library between services, by design, for real independence).
 
 Local DB comes up via `docker-compose up -d` at the repo root (postgres:15-alpine, db `loandb`,
-mounts `db/init.sql`). **This dev Mac doesn't have Docker installed** — verified the schema and
-`loan-code-service` end-to-end via a manually-started Homebrew `postgresql@15` instance instead
-(same `loandb`/`loanuser`/`loanpassword` creds as `docker-compose.yml`, so switching to real
-Docker later needs no config changes; check `pg_isready -p 5432` before assuming it's still up
-in a new session). Production DB is planned to be a managed Postgres add-on (e.g. Render's),
-not a self-hosted container.
+mounts both `db/init.sql` and `db/init_ledger.sql`). **This dev Mac doesn't have Docker
+installed** — verified the schema and `loan-code-service`/`loan-ledger-service` end-to-end via
+a manually-started Homebrew `postgresql@15` instance instead (same `loandb`/`loanuser`/
+`loanpassword` creds as `docker-compose.yml`, so switching to real Docker later needs no config
+changes; check `pg_isready -p 5432` before assuming it's still up in a new session).
+**Production DB is Supabase-hosted Postgres** (not a Render-managed database) — both
+`loan-code-service` and `loan-ledger-service` point at the same Supabase project via
+`SPRING_DATASOURCE_*` env vars wired in `render.yaml` (credentials marked `sync: false`, so
+Render prompts for them rather than storing them in the blueprint file). `db/init_ledger.sql`
+has already been applied directly to that Supabase project (via `psql`, since there's no
+Supabase CLI/API token set up here) with 5 seed rows — re-running it against a fresh Supabase
+project needs the same manual `psql` step.
 
 ## Java calculation rules
 
@@ -212,25 +255,34 @@ or one-off component geometry per screen:
 
 `static/index.html` in `loan-calcurator` already implements these tokens as CSS variables
 (`--color-primary`, `--space-*`, `--radius-*`, etc.) — reuse that variable set for any new
-screen instead of redefining the palette. The screen calls three separate backend origins
-(`ENGINE_SERVICE_BASE`, `SCHEDULE_SERVICE_BASE`, `CODE_SERVICE_BASE` constants near the top
-of the `<script>`) — keep that pattern for any new screen that needs its own services.
+screen instead of redefining the palette. The screen calls four separate backend origins
+(`ENGINE_SERVICE_BASE`, `SCHEDULE_SERVICE_BASE`, `CODE_SERVICE_BASE`, `LEDGER_SERVICE_BASE`
+constants near the top of the `<script>`) — keep that pattern for any new screen that needs
+its own services. All screens/views live in the single `index.html` as sidebar-switched
+`.view` sections (see `#view-interest` / `#view-ledger`), not separate HTML files — follow
+that pattern for any new screen too, and expose a `window.*` hook (like
+`window.fillInterestFormFromLedger`) from a view's IIFE if another view needs to feed it data.
 
 ## Development roadmap
 
-Status as of 2026-07-29:
+Status as of 2026-08-02:
 
-1. ✅ `loan-calcurator` — screen extracted from `loan-engine-service`, calls all three
+1. ✅ `loan-calcurator` — screen extracted from `loan-engine-service`, calls all four
    backend services from the browser.
 2. ✅ `loan-engine-service` — narrowed to 이자계산 only (schedule generation moved out).
 3. ✅ `loan-schedule-service` — 상환스케줄 미리보기, extracted from `loan-engine-service`.
 4. ✅ `loan-code-service` — owns Postgres, serves product/repayment-type/loan-term code
    tables to the screen (with a hardcoded-JS fallback if it's unreachable).
-5. ⏳ In progress / not started: repointing or extending the Render deployment so the
-   live address serves the new `loan-calcurator` screen and it can actually reach the
-   other three services in production (see "Live access points" above); auth/per-user
-   screen permissions; a migration tool; the ledger (owner TBD); extending
-   `.git/hooks/post-commit` to cover the three new modules.
+5. ✅ `loan-ledger-service` — owns `lon_acct_base`, serves 원장조회 to the screen; the
+   screen's "이자계산에 사용" button feeds a looked-up account into the 이자계산 form.
+   Schema applied to both local Postgres and the production Supabase project (5 seed rows).
+6. ⏳ In progress / not started: `render.yaml` now lists all 4 backend services
+   (including `loan-ledger-service`) but the Render dashboard step to actually apply
+   the blueprint/repoint the live deployment hasn't happened yet (see "Live access
+   points" above); auth/per-user screen permissions; a migration tool; the
+   per-installment ledger sketch (owner TBD, see Database schema above); extending
+   `.git/hooks/post-commit` to cover the four new modules; write endpoints for
+   `lon_acct_base` (원장조회 is currently read-only).
 
 When picking up new work here, check which of these is actually true in the repo before
 assuming the next step — don't trust an older draft of this list over what you actually find.
