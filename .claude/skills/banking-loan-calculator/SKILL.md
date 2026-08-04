@@ -88,7 +88,11 @@ below for why that distinction matters here):
   an optional `keyword` filter matched against `acct_no`/`cust_no`) — **원장조회 only**, no
   write endpoints, no other business function. Added 2026-08-02 as the answer to the
   "which service owns the ledger?" question this file used to leave open — see Database
-  schema below for how `lon_acct_base` relates to the older deferred ledger sketch.
+  schema below for how `lon_acct_base` relates to the older deferred ledger sketch. Also
+  serves `GET /api/v1/ledger/accounts/search?custNo=&custName=&acctStatCd=` (added
+  2026-08-04) for the account-search popup shared by 이자계산 and 원장조회 (see UI section) —
+  AND-combined optional filters (blank/omitted param = ignored), distinct from the
+  OR-based `keyword` param on `/accounts` which the main 원장조회 search box still uses.
 - **PostgreSQL**: chosen specifically for `NUMERIC` precision and transactions — required
   for money, never optional.
 
@@ -165,6 +169,20 @@ columns are `VARCHAR(8)` `YYYYMMDD` strings by design (원장 시스템 정합�
 `acct_stat_cd`/`item_cd`/`repay_method_cd` are `CHECK`-constrained and documented via
 `COMMENT ON COLUMN`. No audit columns (`created_at`/`updated_at`) — kept consistent with
 `code_item`/`code_group`, which don't have them either.
+
+`cust_name` (added 2026-08-04) lives directly on `lon_acct_base` rather than a separate
+customer table — there's no customer service/table anywhere in this project, and adding one
+just to hold a name would contradict the "single table, not two FK'd tables" shape this
+ledger deliberately took (see below). Needed for the account-search popup's 고객명 filter.
+
+`rate_change_type_cd` (금리변동구분코드, added 2026-08-04) is `01`=고정금리 / `02`=변동금리,
+`CHECK`-constrained like the other `_cd` columns. `rate_change_cycle` (금리변동주기, 개월수 —
+e.g. `'03'`/`'06'`/`'12'`) is nullable and `CHECK`-tied to it: `NULL` when `01`(고정), required
+when `02`(변동) — see `ck_lon_acct_base_rate_change_cycle`. Both are read/display-only for now:
+`loan-engine-service`/`loan-schedule-service` still calculate off a single `apply_rate` for the
+whole term and don't yet model a rate actually changing mid-schedule — adding that behavior is
+a separate, bigger change (schedule generation would need to re-derive the rate at each cycle
+boundary) and hasn't been requested/built.
 
 This **is** the ledger the rest of this file used to describe as deferred with an undecided
 owner — resolved 2026-08-02: `loan-ledger-service` owns it. Note it is a different, simpler
@@ -263,9 +281,21 @@ its own services. All screens/views live in the single `index.html` as sidebar-s
 that pattern for any new screen too, and expose a `window.*` hook (like
 `window.fillInterestFormFromLedger`) from a view's IIFE if another view needs to feed it data.
 
+**Shared account-search popup** (added 2026-08-04): `#acctSearchModalOverlay` is one modal
+shared by both views via `window.openAccountSearchModal(onSelect)` — call it with a callback
+that receives the full selected account object (not just the acct number), so the caller can
+both fill its own 계좌번호 field and, on the 이자계산 side, feed the account straight into
+`fillInterestFormFromLedger` without a second round trip. It queries
+`loan-ledger-service`'s AND-filtered `/accounts/search` endpoint (고객번호/고객명/계좌상태),
+distinct from the OR-based `keyword` search the main 원장조회 box uses. Any future view that
+needs "pick an account" should reuse this modal/callback pattern rather than building another
+one. `rateChangeInfoText(account)` (top-level helper, next to the modal IIFE) renders
+금리변동구분/주기 as one label (e.g. "변동금리 (6개월 주기)" / "고정금리") — reuse it anywhere
+an account's rate-change info needs to be shown rather than re-deriving it inline.
+
 ## Development roadmap
 
-Status as of 2026-08-02:
+Status as of 2026-08-04:
 
 1. ✅ `loan-calcurator` — screen extracted from `loan-engine-service`, calls all four
    backend services from the browser.
@@ -276,13 +306,21 @@ Status as of 2026-08-02:
 5. ✅ `loan-ledger-service` — owns `lon_acct_base`, serves 원장조회 to the screen; the
    screen's "이자계산에 사용" button feeds a looked-up account into the 이자계산 form.
    Schema applied to both local Postgres and the production Supabase project (5 seed rows).
-6. ⏳ In progress / not started: `render.yaml` now lists all 4 backend services
+6. ✅ Account-search popup (2026-08-04) — shared modal on both 이자계산/원장조회 views,
+   backed by `loan-ledger-service`'s new `/accounts/search` endpoint (고객번호/고객명/계좌상태).
+   `lon_acct_base` gained `cust_name`, `rate_change_type_cd`(01 고정/02 변동), `rate_change_cycle`
+   (개월수, 변동금리일 때만) — applied to local Postgres; **not yet applied to the production
+   Supabase project** (same manual-`psql` step as the original ledger schema — see Database
+   schema above — needs to be re-run there before the next Supabase-backed deploy picks it up).
+7. ⏳ In progress / not started: `render.yaml` now lists all 4 backend services
    (including `loan-ledger-service`) but the Render dashboard step to actually apply
    the blueprint/repoint the live deployment hasn't happened yet (see "Live access
    points" above); auth/per-user screen permissions; a migration tool; the
    per-installment ledger sketch (owner TBD, see Database schema above); extending
    `.git/hooks/post-commit` to cover the four new modules; write endpoints for
-   `lon_acct_base` (원장조회 is currently read-only).
+   `lon_acct_base` (원장조회 is currently read-only); actually using `rate_change_type_cd`/
+   `rate_change_cycle` in interest/schedule calculation (currently display-only, see
+   Database schema above).
 
 When picking up new work here, check which of these is actually true in the repo before
 assuming the next step — don't trust an older draft of this list over what you actually find.
