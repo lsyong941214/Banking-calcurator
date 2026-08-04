@@ -19,6 +19,7 @@ public class LonAcctBase {
     private Integer acctSeqNo;
 
     private String custNo;
+    private String custName;
     private String acctStatCd;
     private String itemCd;
     private String applyNo;
@@ -38,6 +39,8 @@ public class LonAcctBase {
     private BigDecimal applyRate;
     private BigDecimal earlyRepayFeeRate;
     private String repayMethodCd;
+    private String rateChangeTypeCd;
+    private String rateChangeCycle;
     private String virtualAcctNo;
 
     protected LonAcctBase() {
@@ -53,6 +56,10 @@ public class LonAcctBase {
 
     public String getCustNo() {
         return custNo;
+    }
+
+    public String getCustName() {
+        return custName;
     }
 
     public String getAcctStatCd() {
@@ -129,6 +136,14 @@ public class LonAcctBase {
 
     public String getRepayMethodCd() {
         return repayMethodCd;
+    }
+
+    public String getRateChangeTypeCd() {
+        return rateChangeTypeCd;
+    }
+
+    public String getRateChangeCycle() {
+        return rateChangeCycle;
     }
 
     public String getVirtualAcctNo() {

@@ -8,6 +8,7 @@ public record LedgerAccountResponse(
         String acctNo,
         Integer acctSeqNo,
         String custNo,
+        String custName,
         String acctStatCd,
         String itemCd,
         String applyNo,
@@ -27,16 +28,18 @@ public record LedgerAccountResponse(
         BigDecimal applyRate,
         BigDecimal earlyRepayFeeRate,
         String repayMethodCd,
+        String rateChangeTypeCd,
+        String rateChangeCycle,
         String virtualAcctNo
 ) {
     public static LedgerAccountResponse from(LonAcctBase a) {
         return new LedgerAccountResponse(
-                a.getAcctNo(), a.getAcctSeqNo(), a.getCustNo(), a.getAcctStatCd(), a.getItemCd(),
+                a.getAcctNo(), a.getAcctSeqNo(), a.getCustNo(), a.getCustName(), a.getAcctStatCd(), a.getItemCd(),
                 a.getApplyNo(), a.getApprovalNo(), a.getLoanLimitAmt(), a.getLoanBalAmt(),
                 a.getNewDt(), a.getMatDt(), a.getNextIntPayDt(), a.getNextRepayDt(),
                 a.getLastIntPayDt(), a.getLastRepayDt(), a.getDeadlineLossDt(), a.getMonthlyIntPayDay(),
                 a.getBaseRate(), a.getAddRate(), a.getApplyRate(), a.getEarlyRepayFeeRate(),
-                a.getRepayMethodCd(), a.getVirtualAcctNo()
+                a.getRepayMethodCd(), a.getRateChangeTypeCd(), a.getRateChangeCycle(), a.getVirtualAcctNo()
         );
     }
 }

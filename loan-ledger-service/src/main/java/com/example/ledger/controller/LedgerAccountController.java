@@ -23,4 +23,13 @@ public class LedgerAccountController {
     public List<LedgerAccountResponse> accounts(@RequestParam(required = false) String keyword) {
         return ledgerAccountService.search(keyword);
     }
+
+    // 이자계산/원장조회 화면의 "계좌 검색" 팝업 전용 -- 고객번호/고객명/계좌상태로 AND 검색.
+    @GetMapping("/accounts/search")
+    public List<LedgerAccountResponse> searchForAccountPicker(
+            @RequestParam(required = false) String custNo,
+            @RequestParam(required = false) String custName,
+            @RequestParam(required = false) String acctStatCd) {
+        return ledgerAccountService.searchForAccountPicker(custNo, custName, acctStatCd);
+    }
 }
