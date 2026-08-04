@@ -359,6 +359,17 @@
       <div class="card">
         <h2>입력</h2>
         <div class="grid">
+          <div class="field" style="grid-column: 1 / -1;">
+            <label for="i-acctNo">계좌번호</label>
+            <div style="display:flex; gap: var(--space-md);">
+              <input type="text" id="i-acctNo" placeholder="검색 버튼으로 계좌를 선택하세요" readonly style="flex:1;" />
+              <button type="button" class="secondary btn-sm" id="i-acctSearchBtn" style="flex-shrink:0;">검색</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>금리유형</label>
+            <input type="text" id="i-rateChangeInfo" readonly placeholder="계좌 선택 시 표시" />
+          </div>
           <div class="field">
             <label for="i-newDate">신규일자</label>
             <input type="date" id="i-newDate" />
@@ -434,7 +445,10 @@
         <div class="grid">
           <div class="field" style="grid-column: 1 / -1;">
             <label for="l-keyword">계좌번호 / 고객번호</label>
-            <input type="text" id="l-keyword" placeholder="예: 20210610010001" />
+            <div style="display:flex; gap: var(--space-md);">
+              <input type="text" id="l-keyword" placeholder="예: 20210610010001" style="flex:1;" />
+              <button type="button" class="secondary btn-sm" id="l-acctSearchBtn" style="flex-shrink:0;">검색</button>
+            </div>
           </div>
         </div>
         <button class="primary" id="l-searchBtn">조회</button>
@@ -454,6 +468,36 @@
     <div class="modal-title">오류</div>
     <div class="modal-message" id="errorModalMessage"></div>
     <button type="button" class="primary" id="errorModalCloseBtn">확인</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="acctSearchModalOverlay">
+  <div class="modal" style="max-width: 720px;">
+    <div class="modal-title">계좌 검색</div>
+    <div class="grid" style="margin-bottom: var(--space-lg);">
+      <div class="field">
+        <label for="as-custNo">고객번호</label>
+        <input type="text" id="as-custNo" placeholder="예: 2021000045" />
+      </div>
+      <div class="field">
+        <label for="as-custName">고객명</label>
+        <input type="text" id="as-custName" placeholder="예: 김민준" />
+      </div>
+      <div class="field">
+        <label for="as-acctStatCd">계좌상태</label>
+        <select id="as-acctStatCd">
+          <option value="">전체</option>
+          <option value="01">정상</option>
+          <option value="03">정리</option>
+          <option value="04">해지</option>
+          <option value="05">상각</option>
+          <option value="09">매각</option>
+        </select>
+      </div>
+    </div>
+    <button type="button" class="secondary btn-sm" id="as-searchBtn" style="width:100%; margin-bottom: var(--space-lg);">검색</button>
+    <div id="as-resultArea"><div class="placeholder">검색 조건을 입력하고 검색을 눌러주세요.</div></div>
+    <button type="button" class="secondary" id="as-closeBtn">닫기</button>
   </div>
 </div>
 
@@ -530,6 +574,101 @@ $('errorModalCloseBtn').addEventListener('click', closeErrorModal);
 $('errorModalOverlay').addEventListener('click', (e) => {
   if (e.target === $('errorModalOverlay')) closeErrorModal();
 });
+
+// ---------- Account search popup (이자계산/원장조회 화면 공용) ----------
+// 원장조회 화면의 계좌번호 검색과 이자계산 화면의 계좌번호 검색이 동일한 팝업을 공유한다.
+// openAccountSearchModal(onSelect)로 열면, 목록에서 "선택"을 누른 계좌 전체 데이터가
+// onSelect(account)로 전달된다.
+const ACCT_STAT_LABELS = { '01': '정상', '03': '정리', '04': '해지', '05': '상각', '09': '매각' };
+const RATE_CHANGE_TYPE_LABELS = { '01': '고정금리', '02': '변동금리' };
+
+function formatDtDash(s) {
+  return s ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : '-';
+}
+
+function rateChangeInfoText(account) {
+  if (!account.rateChangeTypeCd) return '';
+  const label = RATE_CHANGE_TYPE_LABELS[account.rateChangeTypeCd] || account.rateChangeTypeCd;
+  return account.rateChangeTypeCd === '02' && account.rateChangeCycle
+    ? `${label} (${Number(account.rateChangeCycle)}개월 주기)`
+    : label;
+}
+
+(function () {
+  let onAccountSelected = null;
+
+  function renderAccountSearchResults(accounts) {
+    if (!accounts.length) {
+      $('as-resultArea').innerHTML = '<div class="placeholder">조회된 계좌가 없습니다.</div>';
+      return;
+    }
+    const rows = accounts.map((a, idx) => `
+      <tr>
+        <td>${a.acctNo}</td>
+        <td>${formatDtDash(a.newDt)}</td>
+        <td class="num">${formatWon(a.loanLimitAmt)}</td>
+        <td class="num">${formatWon(a.loanBalAmt)}</td>
+        <td>${ACCT_STAT_LABELS[a.acctStatCd] || a.acctStatCd}</td>
+        <td><button type="button" class="secondary btn-sm" data-idx="${idx}">선택</button></td>
+      </tr>
+    `).join('');
+
+    $('as-resultArea').innerHTML = `
+      <div class="ledger-table-wrap">
+        <table class="ledger-table">
+          <thead>
+            <tr><th>계좌번호</th><th>신규일자</th><th class="num">대출금액</th><th class="num">대출잔액</th><th>계좌상태</th><th></th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    $('as-resultArea').querySelectorAll('button[data-idx]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const account = accounts[Number(btn.dataset.idx)];
+        closeAccountSearchModal();
+        if (onAccountSelected) onAccountSelected(account);
+      });
+    });
+  }
+
+  async function runAccountSearch() {
+    $('as-resultArea').innerHTML = '<div class="placeholder">불러오는 중...</div>';
+    try {
+      const url = new URL(`${LEDGER_SERVICE_BASE}/api/v1/ledger/accounts/search`);
+      const custNo = $('as-custNo').value.trim();
+      const custName = $('as-custName').value.trim();
+      const acctStatCd = $('as-acctStatCd').value;
+      if (custNo) url.searchParams.set('custNo', custNo);
+      if (custName) url.searchParams.set('custName', custName);
+      if (acctStatCd) url.searchParams.set('acctStatCd', acctStatCd);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      renderAccountSearchResults(await res.json());
+    } catch (e) {
+      $('as-resultArea').innerHTML = `<div class="error" style="display:block;">계좌 검색 중 오류가 발생했습니다: ${e.message}</div>`;
+    }
+  }
+
+  window.openAccountSearchModal = function (onSelect) {
+    onAccountSelected = onSelect;
+    $('as-custNo').value = '';
+    $('as-custName').value = '';
+    $('as-acctStatCd').value = '';
+    $('as-resultArea').innerHTML = '<div class="placeholder">검색 조건을 입력하고 검색을 눌러주세요.</div>';
+    $('acctSearchModalOverlay').classList.add('open');
+  };
+  function closeAccountSearchModal() {
+    $('acctSearchModalOverlay').classList.remove('open');
+  }
+
+  $('as-searchBtn').addEventListener('click', runAccountSearch);
+  $('as-closeBtn').addEventListener('click', closeAccountSearchModal);
+  $('acctSearchModalOverlay').addEventListener('click', (e) => {
+    if (e.target === $('acctSearchModalOverlay')) closeAccountSearchModal();
+  });
+})();
 
 // ---------- Sidebar navigation ----------
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -861,6 +1000,9 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   // 대출기간 콤보로 만기일자를 역산하는 신규 입력 흐름과 달리, 원장에는 실제 만기일자가
   // 이미 있으므로 만기일자는 대출기간 선택을 거치지 않고 직접 채운다.
   window.fillInterestFormFromLedger = function (account) {
+    $('i-acctNo').value = account.acctNo;
+    $('i-rateChangeInfo').value = rateChangeInfoText(account);
+
     $('i-productType').value = account.itemCd;
     applyProductRestrictions();
     populateLoanTermOptions();
@@ -883,6 +1025,12 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     const REPAY_METHOD_TO_TYPE = { '01': 'EQUAL_PRINCIPAL_AND_INTEREST', '02': 'EQUAL_PRINCIPAL', '03': 'BULK' };
     switchTab(REPAY_METHOD_TO_TYPE[account.repayMethodCd] || 'EQUAL_PRINCIPAL_AND_INTEREST');
   };
+
+  $('i-acctSearchBtn').addEventListener('click', () => {
+    window.openAccountSearchModal((account) => {
+      window.fillInterestFormFromLedger(account);
+    });
+  });
 })();
 
 // ================= 원장조회 view =================
@@ -912,6 +1060,7 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
         <td>${a.acctNo}</td>
         <td>${a.acctSeqNo}</td>
         <td>${a.custNo}</td>
+        <td>${a.custName}</td>
         <td>${ACCT_STAT_LABELS[a.acctStatCd] || a.acctStatCd}</td>
         <td>${ITEM_LABELS[a.itemCd] || a.itemCd}</td>
         <td class="num">${formatWon(a.loanLimitAmt)}</td>
@@ -920,6 +1069,7 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
         <td>${formatDt(a.matDt)}</td>
         <td class="num">${formatRatePct(a.applyRate)}</td>
         <td>${REPAY_METHOD_LABELS[a.repayMethodCd] || a.repayMethodCd}</td>
+        <td>${rateChangeInfoText(a) || '-'}</td>
         <td><button type="button" class="secondary btn-sm" data-idx="${idx}">이자계산에 사용</button></td>
       </tr>
     `).join('');
@@ -929,9 +1079,9 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
         <table class="ledger-table">
           <thead>
             <tr>
-              <th>계좌번호</th><th>일련</th><th>고객번호</th><th>상태</th><th>과목</th>
+              <th>계좌번호</th><th>일련</th><th>고객번호</th><th>고객명</th><th>상태</th><th>과목</th>
               <th class="num">대출한도</th><th class="num">대출잔액</th>
-              <th>신규일자</th><th>만기일자</th><th class="num">적용금리</th><th>상환방식</th><th></th>
+              <th>신규일자</th><th>만기일자</th><th class="num">적용금리</th><th>상환방식</th><th>금리유형</th><th></th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -967,6 +1117,13 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   $('l-searchBtn').addEventListener('click', loadAccounts);
   $('l-keyword').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') loadAccounts();
+  });
+
+  $('l-acctSearchBtn').addEventListener('click', () => {
+    window.openAccountSearchModal((account) => {
+      $('l-keyword').value = account.acctNo;
+      loadAccounts();
+    });
   });
 
   let loaded = false;
