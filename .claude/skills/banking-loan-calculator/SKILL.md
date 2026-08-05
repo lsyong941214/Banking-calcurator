@@ -277,21 +277,43 @@ screen instead of redefining the palette. The screen calls four separate backend
 (`ENGINE_SERVICE_BASE`, `SCHEDULE_SERVICE_BASE`, `CODE_SERVICE_BASE`, `LEDGER_SERVICE_BASE`
 constants near the top of the `<script>`) — keep that pattern for any new screen that needs
 its own services. All screens/views live in the single `index.html` as sidebar-switched
-`.view` sections (see `#view-interest` / `#view-ledger`), not separate HTML files — follow
-that pattern for any new screen too, and expose a `window.*` hook (like
-`window.fillInterestFormFromLedger`) from a view's IIFE if another view needs to feed it data.
+`.view` sections (see `#view-interest` / `#view-ledger` / `#view-deposit`), not separate HTML
+files — follow that pattern for any new screen too, and expose a `window.*` hook (like
+`window.fillDepositFormFromLedger`) from a view's IIFE if another view needs to feed it data.
 
-**Shared account-search popup** (added 2026-08-04): `#acctSearchModalOverlay` is one modal
-shared by both views via `window.openAccountSearchModal(onSelect)` — call it with a callback
-that receives the full selected account object (not just the acct number), so the caller can
-both fill its own 계좌번호 field and, on the 이자계산 side, feed the account straight into
-`fillInterestFormFromLedger` without a second round trip. It queries
-`loan-ledger-service`'s AND-filtered `/accounts/search` endpoint (고객번호/고객명/계좌상태),
-distinct from the OR-based `keyword` search the main 원장조회 box uses. Any future view that
-needs "pick an account" should reuse this modal/callback pattern rather than building another
-one. `rateChangeInfoText(account)` (top-level helper, next to the modal IIFE) renders
-금리변동구분/주기 as one label (e.g. "변동금리 (6개월 주기)" / "고정금리") — reuse it anywhere
-an account's rate-change info needs to be shown rather than re-deriving it inline.
+**Every screen needs a 초기화(reset) button, and re-clicking its own already-active nav item
+must also reset it** (confirmed with the user 2026-08-05 — this is a standing convention for
+all future screens, not just the three that exist now). The mechanism: each view's IIFE writes
+its own reset function into `VIEW_RESETTERS[viewName]`, and (if it needs one-time setup the
+first time it's shown, like 원장조회's auto-load) into `VIEW_ON_FIRST_SHOW[viewName]`. The
+shared `.nav-item` click handler (top of the script, right before the view IIFEs) checks
+whether the clicked button was already active: if so it calls `VIEW_RESETTERS[view]`, otherwise
+`VIEW_ON_FIRST_SHOW[view]`. **Keep these two paths on separate registries** — an earlier bug
+had the ledger view's "auto-load on first visit" logic living in its own second click listener
+on the same nav button; resetting set its `loaded` flag back to `false`, and that second
+listener fired on the very same click and immediately re-loaded the list, undoing the reset.
+Any new view must register a resetter (and a first-show hook only if it actually needs one).
+
+**Shared account-search popup**: `#acctSearchModalOverlay` is one modal shared by any view via
+`window.openAccountSearchModal(onSelect)` — call it with a callback that receives the full
+selected account object (not just the acct number). It queries `loan-ledger-service`'s
+AND-filtered `/accounts/search` endpoint (고객번호/고객명/계좌상태), distinct from the OR-based
+`keyword` search the main 원장조회 box uses. Any future view that needs "pick an account"
+should reuse this modal/callback pattern rather than building another one. `rateChangeInfoText(account)`,
+`ACCT_STAT_LABELS`, `ITEM_LABELS`, `REPAY_METHOD_LABELS`, `formatDtDash`, `formatRatePct` are
+all top-level helpers (defined once, above the account-search popup IIFE) — reuse them from any
+view rather than redefining local copies (an earlier version had `원장조회` shadow half of these).
+
+**이자계산 vs 입금 split** (2026-08-05): 이자계산 was originally the only calculator and grew a
+계좌번호 search box that filled its manual-entry fields from a real ledger account. The user
+asked to separate those two concerns: 이자계산 is now a **pure simulation** screen (manual
+inputs only, no account lookup at all); the 계좌번호 search + read-only account-info display
+moved to a new **입금** screen (`window.fillDepositFormFromLedger`, populated either via its own
+검색 button or via 원장조회's per-row "입금 계산에 사용" button). 입금's "1회차 계산하기" uses
+the selected account's own dates/rates/balance to call `loan-schedule-service` and show just
+`installments[0]` (원금/이자/납입액/잔액) — a distinct question ("what does installment #1 of
+this real account look like?") from 이자계산's "as of an arbitrary reference date" calculation,
+so it deliberately doesn't reuse 이자계산's engine-service call or repayment-method tabs.
 
 ## Development roadmap
 
@@ -303,8 +325,9 @@ Status as of 2026-08-04:
 3. ✅ `loan-schedule-service` — 상환스케줄 미리보기, extracted from `loan-engine-service`.
 4. ✅ `loan-code-service` — owns Postgres, serves product/repayment-type/loan-term code
    tables to the screen (with a hardcoded-JS fallback if it's unreachable).
-5. ✅ `loan-ledger-service` — owns `lon_acct_base`, serves 원장조회 to the screen; the
-   screen's "이자계산에 사용" button feeds a looked-up account into the 이자계산 form.
+5. ✅ `loan-ledger-service` — owns `lon_acct_base`, serves 원장조회 to the screen; a looked-up
+   account feeds into the 입금 screen (not 이자계산, which is manual-simulation-only) via
+   원장조회's "입금 계산에 사용" button or 입금's own 계좌번호 검색.
    Schema applied to both local Postgres and the production Supabase project (5 seed rows).
 6. ✅ Account-search popup (2026-08-04) — shared modal on both 이자계산/원장조회 views,
    backed by `loan-ledger-service`'s new `/accounts/search` endpoint (고객번호/고객명/계좌상태).

@@ -348,28 +348,21 @@
     <div class="brand">대출계산기</div>
     <button class="nav-item" data-view="ledger">원장조회</button>
     <button class="nav-item active" data-view="interest">이자계산</button>
+    <button class="nav-item" data-view="deposit">입금</button>
   </nav>
 
   <main class="content">
 
     <!-- ===================== 이자계산 ===================== -->
     <section id="view-interest" class="view active">
-      <h1>이자계산</h1>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: var(--space-xl);">
+        <h1 style="margin:0;">이자계산</h1>
+        <button type="button" class="secondary btn-sm" id="i-resetBtn">초기화</button>
+      </div>
 
       <div class="card">
         <h2>입력</h2>
         <div class="grid">
-          <div class="field" style="grid-column: 1 / -1;">
-            <label for="i-acctNo">계좌번호</label>
-            <div style="display:flex; gap: var(--space-md);">
-              <input type="text" id="i-acctNo" placeholder="검색 버튼으로 계좌를 선택하세요" readonly style="flex:1;" />
-              <button type="button" class="secondary btn-sm" id="i-acctSearchBtn" style="flex-shrink:0;">검색</button>
-            </div>
-          </div>
-          <div class="field">
-            <label>금리유형</label>
-            <input type="text" id="i-rateChangeInfo" readonly placeholder="계좌 선택 시 표시" />
-          </div>
           <div class="field">
             <label for="i-newDate">신규일자</label>
             <input type="date" id="i-newDate" />
@@ -438,7 +431,10 @@
 
     <!-- ===================== 원장조회 ===================== -->
     <section id="view-ledger" class="view">
-      <h1>원장조회</h1>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: var(--space-xl);">
+        <h1 style="margin:0;">원장조회</h1>
+        <button type="button" class="secondary btn-sm" id="l-resetBtn">초기화</button>
+      </div>
 
       <div class="card">
         <h2>검색</h2>
@@ -456,7 +452,51 @@
 
       <div class="card">
         <h2>조회 결과</h2>
-        <div id="l-resultArea"><div class="placeholder">조회 버튼을 눌러 원장을 확인하세요. 계좌를 찾으면 "이자계산에 사용" 버튼으로 이자계산 화면에 값을 바로 채울 수 있습니다.</div></div>
+        <div id="l-resultArea"><div class="placeholder">조회 버튼을 눌러 원장을 확인하세요. 계좌를 찾으면 "입금 계산에 사용" 버튼으로 입금 화면에 값을 바로 채울 수 있습니다.</div></div>
+      </div>
+    </section>
+
+    <!-- ===================== 입금 ===================== -->
+    <section id="view-deposit" class="view">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: var(--space-xl);">
+        <h1 style="margin:0;">입금</h1>
+        <button type="button" class="secondary btn-sm" id="d-resetBtn">초기화</button>
+      </div>
+
+      <div class="card">
+        <h2>계좌 선택</h2>
+        <div class="grid">
+          <div class="field" style="grid-column: 1 / -1;">
+            <label for="d-acctNo">계좌번호</label>
+            <div style="display:flex; gap: var(--space-md);">
+              <input type="text" id="d-acctNo" placeholder="검색 버튼으로 계좌를 선택하세요" readonly style="flex:1;" />
+              <button type="button" class="secondary btn-sm" id="d-acctSearchBtn" style="flex-shrink:0;">검색</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>계좌 정보</h2>
+        <div class="grid">
+          <div class="field"><label>고객명</label><input type="text" id="d-custName" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>계좌상태</label><input type="text" id="d-acctStatCd" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>과목</label><input type="text" id="d-itemCd" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>상환방식</label><input type="text" id="d-repayMethodCd" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>신규일자</label><input type="text" id="d-newDt" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>만기일자</label><input type="text" id="d-matDt" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>대출한도</label><input type="text" id="d-loanLimitAmt" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>대출잔액</label><input type="text" id="d-loanBalAmt" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>적용금리</label><input type="text" id="d-applyRate" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>금리유형</label><input type="text" id="d-rateChangeInfo" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>매월납입일</label><input type="text" id="d-monthlyIntPayDay" readonly placeholder="계좌 선택 시 표시" /></div>
+        </div>
+        <button class="primary" id="d-calcBtn" disabled>1회차 계산하기</button>
+      </div>
+
+      <div class="card">
+        <h2>1회차 상환 내역</h2>
+        <div id="d-resultArea"><div class="placeholder">계좌를 선택하고 1회차 계산하기를 눌러주세요.</div></div>
       </div>
     </section>
 
@@ -537,17 +577,6 @@ function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
 
-// YYYYMMDD(원장 저장 형식) -> YYYY-MM-DD(<input type="date"> 값)
-function toIsoDate(yyyymmdd) {
-  return yyyymmdd ? `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}` : '';
-}
-
-// 원장의 금리는 소수(0.035000 = 3.5%)로 저장되어 있어, 사용자가 %로 입력하는
-// 이자계산 폼 필드에 채우려면 100을 곱해 문자열로 바꿔야 한다.
-function toPercentString(fraction) {
-  return fraction == null ? '' : (Number(fraction) * 100).toFixed(2);
-}
-
 // 이 화면(loan-calcurator)은 정적 화면만 서빙하고, 실제 업무 로직은 전부 아래 4개
 // 서비스를 직접 호출해서 처리한다 (업무기능별 서비스 분리).
 //   - loan-engine-service   : 이자계산 (입력 -> 계산 -> 결과 반환)
@@ -591,10 +620,16 @@ $('errorModalOverlay').addEventListener('click', (e) => {
 // openAccountSearchModal(onSelect)로 열면, 목록에서 "선택"을 누른 계좌 전체 데이터가
 // onSelect(account)로 전달된다.
 const ACCT_STAT_LABELS = { '01': '정상', '03': '정리', '04': '해지', '05': '상각', '09': '매각' };
+const ITEM_LABELS = { '01': '주택담보대출', '02': '전세자금대출', '03': '신용대출' };
+const REPAY_METHOD_LABELS = { '01': '원리금균등', '02': '원금균등', '03': '만기일시' };
 const RATE_CHANGE_TYPE_LABELS = { '01': '고정금리', '02': '변동금리' };
 
 function formatDtDash(s) {
   return s ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : '-';
+}
+
+function formatRatePct(v) {
+  return v == null ? '-' : (Number(v) * 100).toFixed(2) + '%';
 }
 
 function rateChangeInfoText(account) {
@@ -682,13 +717,28 @@ function rateChangeInfoText(account) {
 })();
 
 // ---------- Sidebar navigation ----------
+// 각 view의 IIFE가 자신의 초기화 함수를 VIEW_RESETTERS[data-view 값]에, 처음 전환될 때만
+// 할 일(예: 최초 1회 자동 조회)이 있다면 VIEW_ON_FIRST_SHOW[data-view 값]에 등록한다.
+// 새 화면을 추가할 때도 반드시 초기화 함수를 만들어 여기 등록할 것 (프로젝트 컨벤션).
+const VIEW_RESETTERS = {};
+const VIEW_ON_FIRST_SHOW = {};
+
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
+    const wasActive = btn.classList.contains('active');
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     btn.classList.add('active');
     $('view-' + btn.dataset.view).classList.add('active');
     closeSidebar();
+    if (wasActive) {
+      // 이미 활성화된 메뉴를 다시 누른 경우에도 초기화한다.
+      const reset = VIEW_RESETTERS[btn.dataset.view];
+      if (reset) reset();
+    } else {
+      const onFirstShow = VIEW_ON_FIRST_SHOW[btn.dataset.view];
+      if (onFirstShow) onFirstShow();
+    }
   });
 });
 
@@ -1012,57 +1062,51 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     }
   });
 
-  // 원장조회 화면의 "이자계산에 사용" 버튼에서 호출한다 (아래 원장조회 view IIFE 참고).
-  // 대출기간 콤보로 만기일자를 역산하는 신규 입력 흐름과 달리, 원장에는 실제 만기일자가
-  // 이미 있으므로 만기일자는 대출기간 선택을 거치지 않고 직접 채운다.
-  window.fillInterestFormFromLedger = function (account) {
-    $('i-acctNo').value = account.acctNo;
-    $('i-rateChangeInfo').value = rateChangeInfoText(account);
+  // 계좌번호 입력/조회 연동은 이자계산 화면에서 제거하고 입금 화면(window.fillDepositFormFromLedger)
+  // 으로 옮겼다 -- 이 화면은 순수 시뮬레이션(수동 입력값 계산)만 담당한다.
 
-    $('i-productType').value = account.itemCd;
+  function resetInterestForm() {
+    lastResponse = null;
+    lastScheduleResponse = null;
+
+    $('i-productType').value = productOptions[0].code;
     applyProductRestrictions();
     populateLoanTermOptions();
+    switchTab('EQUAL_PRINCIPAL_AND_INTEREST');
 
-    $('i-newDate').value = toIsoDate(account.newDt);
-    $('i-maturityDate').value = toIsoDate(account.matDt);
-    $('i-referenceDate').value = isoDate(new Date());
+    $('i-newDate').value = isoDate(new Date());
+    recalcMaturityDate();
 
-    $('i-baseRate').value = toPercentString(account.baseRate);
-    $('i-spreadRate').value = toPercentString(account.addRate);
+    const referenceDefault = new Date();
+    referenceDefault.setMonth(referenceDefault.getMonth() + 1);
+    $('i-referenceDate').value = isoDate(referenceDefault);
+
+    $('i-baseRate').value = '';
+    $('i-spreadRate').value = '';
     updateDerivedFields();
 
-    $('i-outstandingPrincipal').value = Number(account.loanBalAmt).toLocaleString('ko-KR');
+    $('i-outstandingPrincipal').value = '';
     $('i-partialRepaymentAmount').value = '0';
 
     $('i-feeExempt').checked = false;
     $('i-feeRate').disabled = false;
-    $('i-feeRate').value = toPercentString(account.earlyRepayFeeRate);
+    $('i-feeRate').value = '1';
 
-    const REPAY_METHOD_TO_TYPE = { '01': 'EQUAL_PRINCIPAL_AND_INTEREST', '02': 'EQUAL_PRINCIPAL', '03': 'BULK' };
-    switchTab(REPAY_METHOD_TO_TYPE[account.repayMethodCd] || 'EQUAL_PRINCIPAL_AND_INTEREST');
-  };
+    $('i-resultArea').innerHTML = '<div class="placeholder">좌측 입력 후 계산하기를 눌러주세요.</div>';
 
-  $('i-acctSearchBtn').addEventListener('click', () => {
-    window.openAccountSearchModal((account) => {
-      window.fillInterestFormFromLedger(account);
-    });
-  });
+    scheduleVisible = false;
+    $('i-scheduleArea').style.display = 'none';
+    $('i-scheduleArea').innerHTML = '';
+    $('i-scheduleToggleBtn').textContent = '상환스케줄 미리보기';
+  }
+
+  $('i-resetBtn').addEventListener('click', resetInterestForm);
+  VIEW_RESETTERS.interest = resetInterestForm;
 })();
 
 // ================= 원장조회 view =================
 (function () {
   let lastAccounts = [];
-
-  const ACCT_STAT_LABELS = { '01': '정상', '03': '정리', '04': '해지', '05': '상각', '09': '매각' };
-  const ITEM_LABELS = { '01': '주택담보대출', '02': '전세자금대출', '03': '신용대출' };
-  const REPAY_METHOD_LABELS = { '01': '원리금균등', '02': '원금균등', '03': '만기일시' };
-
-  function formatDt(s) {
-    return s ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : '-';
-  }
-  function formatRatePct(v) {
-    return v == null ? '-' : (Number(v) * 100).toFixed(2) + '%';
-  }
 
   function renderAccounts(accounts) {
     lastAccounts = accounts;
@@ -1081,12 +1125,12 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
         <td>${ITEM_LABELS[a.itemCd] || a.itemCd}</td>
         <td class="num">${formatWon(a.loanLimitAmt)}</td>
         <td class="num">${formatWon(a.loanBalAmt)}</td>
-        <td>${formatDt(a.newDt)}</td>
-        <td>${formatDt(a.matDt)}</td>
+        <td>${formatDtDash(a.newDt)}</td>
+        <td>${formatDtDash(a.matDt)}</td>
         <td class="num">${formatRatePct(a.applyRate)}</td>
         <td>${REPAY_METHOD_LABELS[a.repayMethodCd] || a.repayMethodCd}</td>
         <td>${rateChangeInfoText(a) || '-'}</td>
-        <td><button type="button" class="secondary btn-sm" data-idx="${idx}">이자계산에 사용</button></td>
+        <td><button type="button" class="secondary btn-sm" data-idx="${idx}">입금 계산에 사용</button></td>
       </tr>
     `).join('');
 
@@ -1107,11 +1151,11 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
 
     $('l-resultArea').querySelectorAll('button[data-idx]').forEach(btn => {
       btn.addEventListener('click', () => {
-        window.fillInterestFormFromLedger(lastAccounts[Number(btn.dataset.idx)]);
+        window.fillDepositFormFromLedger(lastAccounts[Number(btn.dataset.idx)]);
         document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        document.querySelector('.nav-item[data-view="interest"]').classList.add('active');
-        $('view-interest').classList.add('active');
+        document.querySelector('.nav-item[data-view="deposit"]').classList.add('active');
+        $('view-deposit').classList.add('active');
       });
     });
   }
@@ -1143,12 +1187,120 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   });
 
   let loaded = false;
-  document.querySelector('.nav-item[data-view="ledger"]').addEventListener('click', () => {
+  VIEW_ON_FIRST_SHOW.ledger = () => {
     if (!loaded) {
       loaded = true;
       loadAccounts();
     }
+  };
+
+  function resetLedgerView() {
+    loaded = false;
+    lastAccounts = [];
+    $('l-keyword').value = '';
+    $('l-resultArea').innerHTML = '<div class="placeholder">조회 버튼을 눌러 원장을 확인하세요. 계좌를 찾으면 "입금 계산에 사용" 버튼으로 입금 화면에 값을 바로 채울 수 있습니다.</div>';
+  }
+
+  $('l-resetBtn').addEventListener('click', resetLedgerView);
+  VIEW_RESETTERS.ledger = resetLedgerView;
+})();
+
+// ================= 입금 view =================
+(function () {
+  let selectedAccount = null;
+  const REPAY_METHOD_TO_TYPE = { '01': 'EQUAL_PRINCIPAL_AND_INTEREST', '02': 'EQUAL_PRINCIPAL', '03': 'BULK' };
+  const DEPOSIT_DISPLAY_FIELDS = [
+    'custName', 'acctStatCd', 'itemCd', 'repayMethodCd', 'newDt', 'matDt',
+    'loanLimitAmt', 'loanBalAmt', 'applyRate', 'rateChangeInfo', 'monthlyIntPayDay'
+  ];
+
+  function resetDepositView() {
+    selectedAccount = null;
+    $('d-acctNo').value = '';
+    DEPOSIT_DISPLAY_FIELDS.forEach(f => { $('d-' + f).value = ''; });
+    $('d-calcBtn').disabled = true;
+    $('d-resultArea').innerHTML = '<div class="placeholder">계좌를 선택하고 1회차 계산하기를 눌러주세요.</div>';
+  }
+
+  function applyAccountToFields(account) {
+    selectedAccount = account;
+    $('d-acctNo').value = account.acctNo;
+    $('d-custName').value = account.custName;
+    $('d-acctStatCd').value = ACCT_STAT_LABELS[account.acctStatCd] || account.acctStatCd;
+    $('d-itemCd').value = ITEM_LABELS[account.itemCd] || account.itemCd;
+    $('d-repayMethodCd').value = REPAY_METHOD_LABELS[account.repayMethodCd] || account.repayMethodCd;
+    $('d-newDt').value = formatDtDash(account.newDt);
+    $('d-matDt').value = formatDtDash(account.matDt);
+    $('d-loanLimitAmt').value = formatWon(account.loanLimitAmt);
+    $('d-loanBalAmt').value = formatWon(account.loanBalAmt);
+    $('d-applyRate').value = formatRatePct(account.applyRate);
+    $('d-rateChangeInfo').value = rateChangeInfoText(account) || '-';
+    $('d-monthlyIntPayDay').value = account.monthlyIntPayDay + '일';
+
+    $('d-calcBtn').disabled = false;
+    $('d-resultArea').innerHTML = '<div class="placeholder">1회차 계산하기를 눌러주세요.</div>';
+  }
+
+  // 원장조회 화면의 "입금 계산에 사용" 버튼에서 호출한다 (위 원장조회 view IIFE 참고).
+  window.fillDepositFormFromLedger = applyAccountToFields;
+
+  $('d-acctSearchBtn').addEventListener('click', () => {
+    window.openAccountSearchModal(applyAccountToFields);
   });
+
+  async function calcFirstInstallment() {
+    if (!selectedAccount) return;
+    const payload = {
+      newDate: formatDtDash(selectedAccount.newDt),
+      maturityDate: formatDtDash(selectedAccount.matDt),
+      baseRate: Number(selectedAccount.baseRate),
+      spreadRate: Number(selectedAccount.addRate),
+      principal: Number(selectedAccount.loanBalAmt)
+    };
+
+    const calcBtn = $('d-calcBtn');
+    const originalLabel = calcBtn.textContent;
+    calcBtn.disabled = true;
+    calcBtn.innerHTML = '<span class="spinner"></span>계산 중...';
+    const slowHintTimer = setTimeout(() => {
+      calcBtn.innerHTML = '<span class="spinner"></span>서버를 깨우는 중... (최대 50초)';
+    }, 4000);
+    $('d-resultArea').innerHTML = '<div class="placeholder">불러오는 중...</div>';
+    try {
+      const res = await fetch(`${SCHEDULE_SERVICE_BASE}/api/v1/repayment-schedules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '1회차 조회 중 오류가 발생했습니다.');
+
+      const type = REPAY_METHOD_TO_TYPE[selectedAccount.repayMethodCd] || 'EQUAL_PRINCIPAL_AND_INTEREST';
+      const result = data.results.find(r => r.repaymentType === type);
+      const first = result && result.installments[0];
+      if (!first) throw new Error('1회차 정보를 찾을 수 없습니다.');
+
+      $('d-resultArea').innerHTML = `
+        <div class="meta">1회차 납부일: <strong>${first.dueDate}</strong></div>
+        <table class="result-table">
+          <tr><td class="label">원금</td><td class="value">${formatWon(first.principalPayment)}</td></tr>
+          <tr><td class="label">이자</td><td class="value">${formatWon(first.interestPayment)}</td></tr>
+          <tr class="total"><td class="label">납입액</td><td class="value">${formatWon(first.totalPayment)}</td></tr>
+          <tr><td class="label">잔액</td><td class="value">${formatWon(first.remainingBalance)}</td></tr>
+        </table>
+      `;
+    } catch (e) {
+      $('d-resultArea').innerHTML = `<div class="error" style="display:block;">${e.message}</div>`;
+    } finally {
+      clearTimeout(slowHintTimer);
+      calcBtn.disabled = false;
+      calcBtn.textContent = originalLabel;
+    }
+  }
+
+  $('d-calcBtn').addEventListener('click', calcFirstInstallment);
+  $('d-resetBtn').addEventListener('click', resetDepositView);
+  VIEW_RESETTERS.deposit = resetDepositView;
 })();
 </script>
 </body>
