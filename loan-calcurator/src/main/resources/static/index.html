@@ -490,6 +490,14 @@
           <div class="field"><label>적용금리</label><input type="text" id="d-applyRate" readonly placeholder="계좌 선택 시 표시" /></div>
           <div class="field"><label>금리유형</label><input type="text" id="d-rateChangeInfo" readonly placeholder="계좌 선택 시 표시" /></div>
           <div class="field"><label>매월납입일</label><input type="text" id="d-monthlyIntPayDay" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>최종이자납입일자</label><input type="text" id="d-lastIntPayDt" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>다음이자납입일자</label><input type="text" id="d-nextIntPayDt" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>최종상환일자</label><input type="text" id="d-lastRepayDt" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>다음상환일자</label><input type="text" id="d-nextRepayDt" readonly placeholder="계좌 선택 시 표시" /></div>
+          <div class="field"><label>기한이익상실일자</label><input type="text" id="d-deadlineLossDt" readonly placeholder="계좌 선택 시 표시" /></div>
+        </div>
+        <div class="grid" style="margin-top: var(--space-md);">
+          <div class="field"><label for="d-referenceDate">계산기준일자</label><input type="date" id="d-referenceDate" /></div>
         </div>
         <button class="primary" id="d-calcBtn" disabled>1회차 계산하기</button>
       </div>
@@ -1211,16 +1219,19 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   const REPAY_METHOD_TO_TYPE = { '01': 'EQUAL_PRINCIPAL_AND_INTEREST', '02': 'EQUAL_PRINCIPAL', '03': 'BULK' };
   const DEPOSIT_DISPLAY_FIELDS = [
     'custName', 'acctStatCd', 'itemCd', 'repayMethodCd', 'newDt', 'matDt',
-    'loanLimitAmt', 'loanBalAmt', 'applyRate', 'rateChangeInfo', 'monthlyIntPayDay'
+    'loanLimitAmt', 'loanBalAmt', 'applyRate', 'rateChangeInfo', 'monthlyIntPayDay',
+    'lastIntPayDt', 'nextIntPayDt', 'lastRepayDt', 'nextRepayDt', 'deadlineLossDt'
   ];
 
   function resetDepositView() {
     selectedAccount = null;
     $('d-acctNo').value = '';
     DEPOSIT_DISPLAY_FIELDS.forEach(f => { $('d-' + f).value = ''; });
+    $('d-referenceDate').value = isoDate(new Date());
     $('d-calcBtn').disabled = true;
     $('d-resultArea').innerHTML = '<div class="placeholder">계좌를 선택하고 1회차 계산하기를 눌러주세요.</div>';
   }
+  $('d-referenceDate').value = isoDate(new Date());
 
   function applyAccountToFields(account) {
     selectedAccount = account;
@@ -1236,6 +1247,11 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     $('d-applyRate').value = formatRatePct(account.applyRate);
     $('d-rateChangeInfo').value = rateChangeInfoText(account) || '-';
     $('d-monthlyIntPayDay').value = account.monthlyIntPayDay + '일';
+    $('d-lastIntPayDt').value = formatDtDash(account.lastIntPayDt);
+    $('d-nextIntPayDt').value = formatDtDash(account.nextIntPayDt);
+    $('d-lastRepayDt').value = formatDtDash(account.lastRepayDt);
+    $('d-nextRepayDt').value = formatDtDash(account.nextRepayDt);
+    $('d-deadlineLossDt').value = formatDtDash(account.deadlineLossDt);
 
     $('d-calcBtn').disabled = false;
     $('d-resultArea').innerHTML = '<div class="placeholder">1회차 계산하기를 눌러주세요.</div>';
@@ -1248,14 +1264,29 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     window.openAccountSearchModal(applyAccountToFields);
   });
 
+  function toIsoOrNull(yyyymmdd) {
+    return yyyymmdd ? formatDtDash(yyyymmdd) : null;
+  }
+
+  const STATUS_BADGE_CLASS = { NORMAL: 'ontime', OVERDUE_INSTALLMENT: 'overdue', ACCELERATED: 'overdue' };
+
   async function calcFirstInstallment() {
     if (!selectedAccount) return;
+    const referenceDate = $('d-referenceDate').value;
+    if (!referenceDate) {
+      $('d-resultArea').innerHTML = '<div class="error" style="display:block;">계산기준일자를 입력해주세요.</div>';
+      return;
+    }
     const payload = {
-      newDate: formatDtDash(selectedAccount.newDt),
-      maturityDate: formatDtDash(selectedAccount.matDt),
+      repaymentType: REPAY_METHOD_TO_TYPE[selectedAccount.repayMethodCd] || 'EQUAL_PRINCIPAL_AND_INTEREST',
+      lastIntPayDt: toIsoOrNull(selectedAccount.lastIntPayDt),
+      nextIntPayDt: toIsoOrNull(selectedAccount.nextIntPayDt),
+      maturityDate: toIsoOrNull(selectedAccount.matDt),
+      deadlineLossDt: toIsoOrNull(selectedAccount.deadlineLossDt),
+      referenceDate,
       baseRate: Number(selectedAccount.baseRate),
       spreadRate: Number(selectedAccount.addRate),
-      principal: Number(selectedAccount.loanBalAmt)
+      outstandingPrincipal: Number(selectedAccount.loanBalAmt)
     };
 
     const calcBtn = $('d-calcBtn');
@@ -1267,26 +1298,39 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     }, 4000);
     $('d-resultArea').innerHTML = '<div class="placeholder">불러오는 중...</div>';
     try {
-      const res = await fetch(`${SCHEDULE_SERVICE_BASE}/api/v1/repayment-schedules`, {
+      const res = await fetch(`${SCHEDULE_SERVICE_BASE}/api/v1/repayment-schedules/current-installment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || '1회차 조회 중 오류가 발생했습니다.');
+      const r = await res.json();
+      if (!res.ok) throw new Error(r.message || '1회차 조회 중 오류가 발생했습니다.');
 
-      const type = REPAY_METHOD_TO_TYPE[selectedAccount.repayMethodCd] || 'EQUAL_PRINCIPAL_AND_INTEREST';
-      const result = data.results.find(r => r.repaymentType === type);
-      const first = result && result.installments[0];
-      if (!first) throw new Error('1회차 정보를 찾을 수 없습니다.');
+      const badgeClass = STATUS_BADGE_CLASS[r.status] || 'ontime';
+      const badge = `<span class="badge ${badgeClass}">${r.statusLabel}</span>`;
+
+      let overdueRows = '';
+      if (r.overdueDays > 0) {
+        overdueRows += `
+          <tr><td class="label">원금연체이자 (${r.overdueDays}일)</td><td class="value">${formatWon(r.overduePrincipalInterest)}</td></tr>
+          <tr><td class="label">연체이자 (${r.overdueDays}일)</td><td class="value">${formatWon(r.overdueInterest)}</td></tr>
+        `;
+      }
+      let accelerationRows = '';
+      if (r.accelerationDays > 0) {
+        accelerationRows = `
+          <tr><td class="label">기한이익상실 원금연체이자<br><span style="font-weight:400; color: var(--color-muted);">(${r.accelerationStartDate} ~ 기준일자, ${r.accelerationDays}일, 잔액 전체)</span></td><td class="value">${formatWon(r.acceleratedPrincipalInterest)}</td></tr>
+        `;
+      }
 
       $('d-resultArea').innerHTML = `
-        <div class="meta">1회차 납부일: <strong>${first.dueDate}</strong></div>
+        <div class="meta">회차 구간: <strong>${r.periodStart} ~ ${r.periodEnd}</strong> ${badge}</div>
         <table class="result-table">
-          <tr><td class="label">원금</td><td class="value">${formatWon(first.principalPayment)}</td></tr>
-          <tr><td class="label">이자</td><td class="value">${formatWon(first.interestPayment)}</td></tr>
-          <tr class="total"><td class="label">납입액</td><td class="value">${formatWon(first.totalPayment)}</td></tr>
-          <tr><td class="label">잔액</td><td class="value">${formatWon(first.remainingBalance)}</td></tr>
+          <tr><td class="label">원금</td><td class="value">${formatWon(r.principal)}</td></tr>
+          <tr><td class="label">이자</td><td class="value">${formatWon(r.interest)}</td></tr>
+          ${overdueRows}
+          ${accelerationRows}
+          <tr class="total"><td class="label">기준일자 납부금액</td><td class="value">${formatWon(r.totalDueAmount)}</td></tr>
         </table>
       `;
     } catch (e) {
