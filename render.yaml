@@ -26,6 +26,12 @@ services:
     envVars:
       - key: APP_CORS_ALLOWED_ORIGINS
         value: https://banking-calcurator.onrender.com,https://whimsical-unadvised-divisibly.ngrok-free.dev
+      # Server-to-server call to loan-code-service's holiday table (BusinessDayCalendar).
+      # Assumes Render's default service URL pattern -- verify against the actual dashboard
+      # URL once loan-code-service is actually deployed there (see SKILL.md's "mid-transition"
+      # note); if unreachable this just falls back to weekday-only, so it won't break the calc.
+      - key: CODE_SERVICE_BASE_URL
+        value: https://loan-code-service.onrender.com
 
   - type: web
     name: loan-code-service

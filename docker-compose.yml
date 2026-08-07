@@ -13,6 +13,7 @@ services:
     volumes:
       - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./db/init_ledger.sql:/docker-entrypoint-initdb.d/02-init_ledger.sql
+      - ./db/init_holiday.sql:/docker-entrypoint-initdb.d/03-init_holiday.sql
       - loan-db-data:/var/lib/postgresql/data
 
 volumes:
