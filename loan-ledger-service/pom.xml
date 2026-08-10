@@ -28,6 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<openfeign-querydsl.version>7.5</openfeign-querydsl.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -47,6 +48,12 @@
 		</dependency>
 
 		<dependency>
+			<groupId>io.github.openfeign.querydsl</groupId>
+			<artifactId>querydsl-jpa</artifactId>
+			<version>${openfeign-querydsl.version}</version>
+		</dependency>
+
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
@@ -58,6 +65,26 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<annotationProcessorPaths>
+						<annotationProcessorPath>
+							<groupId>io.github.openfeign.querydsl</groupId>
+							<artifactId>querydsl-apt</artifactId>
+							<version>${openfeign-querydsl.version}</version>
+							<classifier>jpa</classifier>
+						</annotationProcessorPath>
+						<annotationProcessorPath>
+							<groupId>jakarta.persistence</groupId>
+							<artifactId>jakarta.persistence-api</artifactId>
+						</annotationProcessorPath>
+					</annotationProcessorPaths>
+					<generatedSourcesDirectory>${project.build.directory}/generated-sources</generatedSourcesDirectory>
+					<generatedTestSourcesDirectory>${project.build.directory}/generated-test-sources</generatedTestSourcesDirectory>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

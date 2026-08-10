@@ -346,6 +346,7 @@
 <div class="app-shell">
   <nav class="sidebar" id="sidebar">
     <div class="brand">대출계산기</div>
+    <button class="nav-item" data-view="account-create">계좌생성</button>
     <button class="nav-item" data-view="ledger">원장조회</button>
     <button class="nav-item active" data-view="interest">이자계산</button>
     <button class="nav-item" data-view="deposit">입금</button>
@@ -426,6 +427,113 @@
         <div id="i-resultArea"><div class="placeholder">좌측 입력 후 계산하기를 눌러주세요.</div></div>
         <button type="button" class="secondary" id="i-scheduleToggleBtn">상환스케줄 미리보기</button>
         <div id="i-scheduleArea" style="display:none; margin-top: var(--space-lg);"></div>
+      </div>
+    </section>
+
+    <!-- ===================== 계좌생성 ===================== -->
+    <section id="view-account-create" class="view">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: var(--space-xl);">
+        <h1 style="margin:0;">계좌생성</h1>
+        <button type="button" class="secondary btn-sm" id="c-resetBtn">초기화</button>
+      </div>
+
+      <div class="card">
+        <h2>기존 계좌 불러오기 (수정/삭제용)</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="c-acctNo">계좌번호</label>
+            <input type="text" id="c-acctNo" placeholder="예: 20260810010001" />
+          </div>
+          <div class="field">
+            <label for="c-acctSeqNo">계좌일련번호</label>
+            <input type="text" inputmode="numeric" id="c-acctSeqNo" placeholder="예: 1" />
+          </div>
+        </div>
+        <div style="display:flex; gap: var(--space-md); margin-top: var(--space-lg);">
+          <button type="button" class="secondary" id="c-loadBtn" style="flex:1;">계좌번호로 불러오기</button>
+          <button type="button" class="secondary" id="c-acctSearchBtn" style="flex:1;">계좌 검색</button>
+          <button type="button" class="secondary" id="c-newBtn" style="flex:1;">새 계좌 등록</button>
+        </div>
+        <div class="meta" id="c-modeLabel" style="margin-top: var(--space-lg); margin-bottom:0;">신규 등록 모드</div>
+      </div>
+
+      <div class="card">
+        <h2>계좌 정보</h2>
+        <div class="grid">
+          <div class="field"><label for="c-custNo">고객번호</label><input type="text" id="c-custNo" placeholder="예: 2026000001" /></div>
+          <div class="field"><label for="c-custName">고객명</label><input type="text" id="c-custName" placeholder="예: 홍길동" /></div>
+          <div class="field">
+            <label for="c-acctStatCd">계좌상태</label>
+            <select id="c-acctStatCd">
+              <option value="01">정상</option>
+              <option value="03">정리</option>
+              <option value="04">해지</option>
+              <option value="05">상각</option>
+              <option value="09">매각</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="c-itemCd">과목</label>
+            <select id="c-itemCd">
+              <option value="01">주택담보대출</option>
+              <option value="02">전세자금대출</option>
+              <option value="03">신용대출</option>
+            </select>
+          </div>
+          <div class="field"><label for="c-loanLimitAmt">대출한도 (원)</label><input type="text" inputmode="numeric" id="c-loanLimitAmt" placeholder="예: 100,000,000" /></div>
+          <div class="field"><label for="c-loanBalAmt">대출잔액 (원)</label><input type="text" inputmode="numeric" id="c-loanBalAmt" placeholder="예: 100,000,000" /></div>
+          <div class="field"><label for="c-newDt">신규일자</label><input type="date" id="c-newDt" /></div>
+          <div class="field"><label for="c-matDt">만기일자</label><input type="date" id="c-matDt" /></div>
+          <div class="field"><label for="c-nextIntPayDt">다음이자납입일자</label><input type="date" id="c-nextIntPayDt" /></div>
+          <div class="field"><label for="c-nextRepayDt">다음상환일자</label><input type="date" id="c-nextRepayDt" /></div>
+          <div class="field"><label for="c-lastIntPayDt">최종이자납입일자</label><input type="date" id="c-lastIntPayDt" /></div>
+          <div class="field"><label for="c-lastRepayDt">최종상환일자</label><input type="date" id="c-lastRepayDt" /></div>
+          <div class="field"><label for="c-deadlineLossDt">기한이익상실일자</label><input type="date" id="c-deadlineLossDt" /></div>
+          <div class="field"><label for="c-monthlyIntPayDay">매월이자납입일</label><input type="text" inputmode="numeric" id="c-monthlyIntPayDay" placeholder="예: 10" /></div>
+          <div class="field">
+            <label>기준금리 + 가산금리 = 적용금리 (%)</label>
+            <div class="rate-pair">
+              <input type="text" inputmode="decimal" id="c-baseRate" placeholder="0.00" />
+              <span>+</span>
+              <input type="text" inputmode="decimal" id="c-addRate" placeholder="0.00" />
+              <span>=</span>
+              <input type="text" class="applied-rate" id="c-applyRate" disabled placeholder="0.00" style="max-width:90px" />
+            </div>
+          </div>
+          <div class="field"><label for="c-earlyRepayFeeRate">조기상환수수료율 (%)</label><input type="text" inputmode="decimal" id="c-earlyRepayFeeRate" placeholder="0.00" /></div>
+          <div class="field">
+            <label for="c-repayMethodCd">상환방식</label>
+            <select id="c-repayMethodCd">
+              <option value="01">원리금균등</option>
+              <option value="02">원금균등</option>
+              <option value="03">만기일시</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="c-rateChangeTypeCd">금리유형</label>
+            <select id="c-rateChangeTypeCd">
+              <option value="01">고정금리</option>
+              <option value="02">변동금리</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="c-rateChangeCycle">금리변동주기</label>
+            <select id="c-rateChangeCycle" disabled>
+              <option value="">-</option>
+              <option value="03">3개월</option>
+              <option value="06">6개월</option>
+              <option value="12">12개월</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="c-formMsg" class="meta" style="display:none;"></div>
+
+        <div style="display:flex; gap: var(--space-md); margin-top: var(--space-xl);">
+          <button type="button" class="primary" id="c-registerBtn" style="flex:1; margin-top:0;">등록</button>
+          <button type="button" class="primary" id="c-updateBtn" style="flex:1; margin-top:0; display:none;">수정 저장</button>
+          <button type="button" class="secondary" id="c-deleteBtn" style="flex:1; margin-top:0; display:none; border-color: var(--color-danger); color: var(--color-danger);">계좌 삭제</button>
+        </div>
       </div>
     </section>
 
@@ -1110,6 +1218,233 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
 
   $('i-resetBtn').addEventListener('click', resetInterestForm);
   VIEW_RESETTERS.interest = resetInterestForm;
+})();
+
+// ================= 계좌생성(CRUD) view =================
+(function () {
+  let editingAccount = null; // null = 신규 등록 모드, 값이 있으면 수정 모드(해당 PK)
+
+  ['c-loanLimitAmt', 'c-loanBalAmt'].forEach(id => attachAmountFormatting($(id)));
+  ['c-baseRate', 'c-addRate', 'c-earlyRepayFeeRate'].forEach(id => attachRateFormatting($(id)));
+
+  function toYyyymmdd(isoDate) {
+    return isoDate ? isoDate.replaceAll('-', '') : null;
+  }
+  function toIsoDateInput(yyyymmdd) {
+    return yyyymmdd ? `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}` : '';
+  }
+
+  function updateAppliedRate() {
+    const base = parseFloat($('c-baseRate').value);
+    const add = parseFloat($('c-addRate').value);
+    $('c-applyRate').value = (!isNaN(base) && !isNaN(add)) ? (base + add).toFixed(2) : '';
+  }
+  $('c-baseRate').addEventListener('input', updateAppliedRate);
+  $('c-addRate').addEventListener('input', updateAppliedRate);
+
+  // CHECK ck_lon_acct_base_rate_change_cycle: 고정금리(01)면 주기 NULL, 변동금리(02)면 주기 필수.
+  function applyRateChangeCycleConstraint() {
+    const isFixed = $('c-rateChangeTypeCd').value === '01';
+    $('c-rateChangeCycle').disabled = isFixed;
+    if (isFixed) $('c-rateChangeCycle').value = '';
+  }
+  $('c-rateChangeTypeCd').addEventListener('change', applyRateChangeCycleConstraint);
+
+  function setMode(isEdit) {
+    $('c-acctNo').readOnly = isEdit;
+    $('c-acctSeqNo').readOnly = isEdit;
+    $('c-registerBtn').style.display = isEdit ? 'none' : '';
+    $('c-updateBtn').style.display = isEdit ? '' : 'none';
+    $('c-deleteBtn').style.display = isEdit ? '' : 'none';
+    $('c-modeLabel').textContent = isEdit ? `수정 모드 (${editingAccount.acctNo}-${editingAccount.acctSeqNo})` : '신규 등록 모드';
+  }
+
+  function showFormMsg(message, isError) {
+    const el = $('c-formMsg');
+    el.textContent = message;
+    el.style.color = isError ? 'var(--color-danger)' : 'var(--color-weak-fg)';
+    el.style.display = 'block';
+  }
+
+  function clearForm() {
+    editingAccount = null;
+    ['acctNo', 'acctSeqNo', 'custNo', 'custName', 'loanLimitAmt', 'loanBalAmt',
+      'newDt', 'matDt', 'nextIntPayDt', 'nextRepayDt', 'lastIntPayDt', 'lastRepayDt', 'deadlineLossDt',
+      'monthlyIntPayDay', 'baseRate', 'addRate', 'earlyRepayFeeRate', 'rateChangeCycle'].forEach(f => {
+      $('c-' + f).value = '';
+    });
+    $('c-applyRate').value = '';
+    $('c-acctStatCd').value = '01';
+    $('c-itemCd').value = '01';
+    $('c-repayMethodCd').value = '01';
+    $('c-rateChangeTypeCd').value = '01';
+    applyRateChangeCycleConstraint();
+    setMode(false);
+    $('c-formMsg').style.display = 'none';
+  }
+
+  function fillFormForEdit(account) {
+    editingAccount = { acctNo: account.acctNo, acctSeqNo: account.acctSeqNo };
+    $('c-acctNo').value = account.acctNo;
+    $('c-acctSeqNo').value = account.acctSeqNo;
+    $('c-custNo').value = account.custNo;
+    $('c-custName').value = account.custName;
+    $('c-acctStatCd').value = account.acctStatCd;
+    $('c-itemCd').value = account.itemCd;
+    $('c-loanLimitAmt').value = Number(account.loanLimitAmt).toLocaleString('ko-KR');
+    $('c-loanBalAmt').value = Number(account.loanBalAmt).toLocaleString('ko-KR');
+    $('c-newDt').value = toIsoDateInput(account.newDt);
+    $('c-matDt').value = toIsoDateInput(account.matDt);
+    $('c-nextIntPayDt').value = toIsoDateInput(account.nextIntPayDt);
+    $('c-nextRepayDt').value = toIsoDateInput(account.nextRepayDt);
+    $('c-lastIntPayDt').value = toIsoDateInput(account.lastIntPayDt);
+    $('c-lastRepayDt').value = toIsoDateInput(account.lastRepayDt);
+    $('c-deadlineLossDt').value = toIsoDateInput(account.deadlineLossDt);
+    $('c-monthlyIntPayDay').value = account.monthlyIntPayDay || '';
+    $('c-baseRate').value = (Number(account.baseRate) * 100).toFixed(2);
+    $('c-addRate').value = (Number(account.addRate) * 100).toFixed(2);
+    $('c-earlyRepayFeeRate').value = (Number(account.earlyRepayFeeRate) * 100).toFixed(2);
+    updateAppliedRate();
+    $('c-repayMethodCd').value = account.repayMethodCd;
+    $('c-rateChangeTypeCd').value = account.rateChangeTypeCd;
+    $('c-rateChangeCycle').value = account.rateChangeCycle || '';
+    applyRateChangeCycleConstraint();
+    setMode(true);
+    $('c-formMsg').style.display = 'none';
+  }
+
+  function buildPayload() {
+    return {
+      custNo: $('c-custNo').value.trim(),
+      custName: $('c-custName').value.trim(),
+      acctStatCd: $('c-acctStatCd').value,
+      itemCd: $('c-itemCd').value,
+      applyNo: null,
+      approvalNo: null,
+      loanLimitAmt: parseAmount($('c-loanLimitAmt')),
+      loanBalAmt: parseAmount($('c-loanBalAmt')),
+      newDt: toYyyymmdd($('c-newDt').value),
+      matDt: toYyyymmdd($('c-matDt').value),
+      nextIntPayDt: toYyyymmdd($('c-nextIntPayDt').value),
+      nextRepayDt: toYyyymmdd($('c-nextRepayDt').value),
+      lastIntPayDt: toYyyymmdd($('c-lastIntPayDt').value),
+      lastRepayDt: toYyyymmdd($('c-lastRepayDt').value),
+      deadlineLossDt: toYyyymmdd($('c-deadlineLossDt').value),
+      monthlyIntPayDay: $('c-monthlyIntPayDay').value.trim(),
+      baseRate: parseFloat($('c-baseRate').value) / 100,
+      addRate: parseFloat($('c-addRate').value) / 100,
+      applyRate: parseFloat($('c-applyRate').value) / 100,
+      earlyRepayFeeRate: parseFloat($('c-earlyRepayFeeRate').value) / 100,
+      repayMethodCd: $('c-repayMethodCd').value,
+      rateChangeTypeCd: $('c-rateChangeTypeCd').value,
+      rateChangeCycle: $('c-rateChangeTypeCd').value === '02' ? $('c-rateChangeCycle').value : null,
+      virtualAcctNo: null
+    };
+  }
+
+  async function loadAccountByPk() {
+    const acctNo = $('c-acctNo').value.trim();
+    const acctSeqNo = $('c-acctSeqNo').value.trim();
+    if (!acctNo || !acctSeqNo) {
+      showErrorModal('계좌번호와 계좌일련번호를 입력해주세요.');
+      return;
+    }
+    try {
+      const res = await fetch(`${LEDGER_SERVICE_BASE}/api/v1/ledger/accounts/${encodeURIComponent(acctNo)}/${encodeURIComponent(acctSeqNo)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '계좌 조회 중 오류가 발생했습니다.');
+      fillFormForEdit(data);
+    } catch (e) {
+      showErrorModal(e.message);
+    }
+  }
+
+  async function submitRegister() {
+    const acctNo = $('c-acctNo').value.trim();
+    const acctSeqNoRaw = $('c-acctSeqNo').value.trim();
+    const acctSeqNo = Number(acctSeqNoRaw);
+    if (!acctNo || !acctSeqNoRaw || !Number.isInteger(acctSeqNo)) {
+      showErrorModal('계좌번호와 계좌일련번호(정수)를 입력해주세요.');
+      return;
+    }
+    const payload = { acctNo, acctSeqNo, ...buildPayload() };
+
+    const btn = $('c-registerBtn');
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>등록 중...';
+    try {
+      const res = await fetch(`${LEDGER_SERVICE_BASE}/api/v1/ledger/accounts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '등록 중 오류가 발생했습니다.');
+      fillFormForEdit(data);
+      showFormMsg('계좌가 등록되었습니다.', false);
+    } catch (e) {
+      showErrorModal(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  async function submitUpdate() {
+    if (!editingAccount) return;
+    const btn = $('c-updateBtn');
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>저장 중...';
+    try {
+      const res = await fetch(`${LEDGER_SERVICE_BASE}/api/v1/ledger/accounts/${editingAccount.acctNo}/${editingAccount.acctSeqNo}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload())
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '수정 중 오류가 발생했습니다.');
+      fillFormForEdit(data);
+      showFormMsg('계좌 정보가 수정되었습니다.', false);
+    } catch (e) {
+      showErrorModal(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  async function submitDelete() {
+    if (!editingAccount) return;
+    if (!confirm(`계좌 ${editingAccount.acctNo}-${editingAccount.acctSeqNo}를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
+    try {
+      const res = await fetch(`${LEDGER_SERVICE_BASE}/api/v1/ledger/accounts/${editingAccount.acctNo}/${editingAccount.acctSeqNo}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok && res.status !== 204) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || '삭제 중 오류가 발생했습니다.');
+      }
+      clearForm();
+      showFormMsg('계좌가 삭제되었습니다.', false);
+    } catch (e) {
+      showErrorModal(e.message);
+    }
+  }
+
+  $('c-loadBtn').addEventListener('click', loadAccountByPk);
+  $('c-acctSearchBtn').addEventListener('click', () => {
+    window.openAccountSearchModal(fillFormForEdit);
+  });
+  $('c-registerBtn').addEventListener('click', submitRegister);
+  $('c-updateBtn').addEventListener('click', submitUpdate);
+  $('c-deleteBtn').addEventListener('click', submitDelete);
+  $('c-newBtn').addEventListener('click', clearForm);
+  $('c-resetBtn').addEventListener('click', clearForm);
+
+  clearForm();
+  VIEW_RESETTERS['account-create'] = clearForm;
 })();
 
 // ================= 원장조회 view =================
