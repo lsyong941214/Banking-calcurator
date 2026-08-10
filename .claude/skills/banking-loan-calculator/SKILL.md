@@ -85,14 +85,25 @@ below for why that distinction matters here):
   to be hardcoded in the frontend JS. **This is not the ledger.**
 - **loan-ledger-service** (port 8084): owns the `lon_acct_base` (대출계좌원장) table on the
   same Postgres instance as loan-code-service. Serves `GET /api/v1/ledger/accounts` (with
-  an optional `keyword` filter matched against `acct_no`/`cust_no`) — **원장조회 only**, no
-  write endpoints, no other business function. Added 2026-08-02 as the answer to the
+  an optional `keyword` filter matched against `acct_no`/`cust_no`) — 원장조회 was its original
+  and still primary business function. Added 2026-08-02 as the answer to the
   "which service owns the ledger?" question this file used to leave open — see Database
   schema below for how `lon_acct_base` relates to the older deferred ledger sketch. Also
   serves `GET /api/v1/ledger/accounts/search?custNo=&custName=&acctStatCd=` (added
   2026-08-04) for the account-search popup shared by 이자계산 and 원장조회 (see UI section) —
   AND-combined optional filters (blank/omitted param = ignored), distinct from the
   OR-based `keyword` param on `/accounts` which the main 원장조회 search box still uses.
+  **As of 2026-08-11 this service also owns full CRUD** on `lon_acct_base`: `GET
+  /accounts/{acctNo}/{acctSeqNo}` (단건조회), `POST /accounts` (등록), `PUT
+  /accounts/{acctNo}/{acctSeqNo}` (수정, full-replace of every non-PK column), `DELETE
+  /accounts/{acctNo}/{acctSeqNo}` (삭제, hard delete — no soft-delete/status-only convention
+  was requested, matches this being a toy/learning project rather than real banking ops).
+  `/accounts/search`'s AND-combined optional filters were rebuilt on QueryDSL
+  (`LonAcctBaseRepositoryCustom`/`Impl`, `JPAQueryFactory` bean in `QuerydslConfig`) instead
+  of the earlier JPQL `'' OR` string-hack — see "Table relationships & ORM fetch strategy"
+  below for the standing convention this set going forward. `loan-calcurator` has a
+  matching **계좌생성** screen (sidebar, above 원장조회) that exercises all four endpoints —
+  see UI section.
 - **PostgreSQL**: chosen specifically for `NUMERIC` precision and transactions — required
   for money, never optional.
 
@@ -141,11 +152,14 @@ int_calc/
 │       └── config/               # CorsConfig
 └── loan-ledger-service/          # port 8084 -- owns lon_acct_base on the same Postgres/Supabase
     └── src/main/java/com/example/ledger/
-        ├── controller/           # GET /api/v1/ledger/accounts?keyword=
+        ├── controller/           # LedgerAccountController (GET/POST/PUT/DELETE /api/v1/ledger/accounts*)
+        │                         # GlobalExceptionHandler (400 IllegalArgumentException/
+        │                         # DataIntegrityViolationException, 404 NoSuchElementException)
         ├── service/              # LedgerAccountService
-        ├── domain/               # LonAcctBase, LonAcctBaseId (composite key: acctNo+acctSeqNo)
-        ├── repository/           # LonAcctBaseRepository
-        └── config/               # CorsConfig
+        ├── domain/               # LonAcctBase (full ctor + setters for CRUD), LonAcctBaseId
+        ├── dto/                  # LedgerAccountResponse, *CreateRequest, *UpdateRequest
+        ├── repository/           # LonAcctBaseRepository + LonAcctBaseRepositoryCustom/Impl (QueryDSL)
+        └── config/               # CorsConfig, QuerydslConfig (JPAQueryFactory bean)
 ```
 
 ## Database schema
@@ -220,6 +234,44 @@ Render prompts for them rather than storing them in the blueprint file). `db/ini
 has already been applied directly to that Supabase project (via `psql`, since there's no
 Supabase CLI/API token set up here) with 5 seed rows — re-running it against a fresh Supabase
 project needs the same manual `psql` step.
+
+## Table relationships & ORM fetch strategy
+
+Set 2026-08-11 when `lon_acct_base` gained JPA CRUD + a QueryDSL custom repository (see
+loan-ledger-service above). Two standing rules for *any* future table in this project, not
+just `lon_acct_base` — apply them whenever a new table/entity is being designed, even if the
+request only asks for one field or one screen:
+
+**1. Ask how the new table relates to existing 원장 tables before designing it.** Don't infer
+cardinality from the table/column names alone. Ask the user explicitly, e.g. "이 테이블이
+`lon_acct_base`의 한 계좌당 여러 행을 갖는 관계인가요(1:N), 아니면 계좌 하나에 한 행만 붙는
+관계인가요(1:1)?" — and if it references more than one existing ledger table, ask about each
+relationship separately. Only after the relationship is confirmed, design the FK and the
+Java-side association to match it, and pick the fetch strategy for that shape:
+- **1:N / N:1** (e.g. 원장 : 입출금내역, 원장 : 상환이력) → `@OneToMany`/`@ManyToOne`, and the
+  collection side defaults to `FetchType.LAZY` — never default a `@OneToMany` to `EAGER`,
+  since that silently pulls the whole child collection on every parent load, including list/
+  search screens that never needed it (원장 목록 조회 shouldn't drag every child row along).
+- **1:1** → `@OneToOne`, also `LAZY` by default unless there's one specific, named read path
+  that always needs both sides together (in which case fetch-join *that query*, not the
+  mapping).
+- **Any read that genuinely needs the association populated in one round trip** → an
+  explicit QueryDSL fetch join (`.leftJoin(parent.children, child).fetchJoin()`) or JPQL
+  `JOIN FETCH` scoped to that one repository method, following the same per-query-not-
+  per-entity pattern `LonAcctBaseRepositoryCustom`/`Impl` already established for
+  `searchForAccountPicker` — keep the N+1-vs-fetch-join tradeoff a decision made per query,
+  not a blanket setting on the entity.
+
+**2. When a search/list feature needs an outer join, propose the result-compaction shape
+before writing the query.** A `LEFT JOIN` against a 1:N child table (e.g. "계좌 목록에 최근
+입금내역도 같이 보여줘") can multiply rows (cartesian product across the child rows) or return
+an awkward nested shape. Before implementing, propose to the user how the result stays
+compact — options like: paginating/capping the parent list, aggregating the child side
+(latest-row-only, or `COUNT`/`SUM` instead of raw child rows), or projecting into a flat DTO
+(one row per parent, nullable child columns) instead of returning a nested entity graph — and
+get agreement on the shape first. Only start the QueryDSL/JPQL implementation once that's
+settled, the same way `searchForAccountPicker`'s AND-combined optional-filter shape was a
+design decision made before the QueryDSL code was written, not discovered while coding.
 
 ## Java calculation rules
 
@@ -315,6 +367,15 @@ the selected account's own dates/rates/balance to call `loan-schedule-service` a
 this real account look like?") from 이자계산's "as of an arbitrary reference date" calculation,
 so it deliberately doesn't reuse 이자계산's engine-service call or repayment-method tabs.
 
+**계좌생성 screen** (added 2026-08-11, sidebar item above 원장조회): the CRUD counterpart to
+원장조회's read-only list. 신규 등록 모드 vs 수정 모드 toggle by whether an account was loaded
+(via PK입력+"계좌번호로 불러오기", or via the shared account-search popup) — PK fields
+(`acctNo`/`acctSeqNo`) go readonly once in edit mode, matching the backend's PUT semantics
+(PK immutable after 등록). Reuses the same amount/rate-formatting helpers and the shared
+account-search popup as every other screen — don't re-implement those locally here either.
+삭제 uses a native `confirm()`, not a custom modal (kept intentionally lightweight, not a gap
+to fix later unless the user asks for one).
+
 ## Development roadmap
 
 Status as of 2026-08-04:
@@ -335,15 +396,19 @@ Status as of 2026-08-04:
    (개월수, 변동금리일 때만) — applied to local Postgres; **not yet applied to the production
    Supabase project** (same manual-`psql` step as the original ledger schema — see Database
    schema above — needs to be re-run there before the next Supabase-backed deploy picks it up).
-7. ⏳ In progress / not started: `render.yaml` now lists all 4 backend services
+7. ✅ `lon_acct_base` CRUD + QueryDSL (2026-08-11) — 등록/단건조회/수정/삭제 endpoints and the
+   `계좌생성` screen (see UI section); `/accounts/search` rebuilt on QueryDSL instead of JPQL.
+   The "Table relationships & ORM fetch strategy" section above is now the standing convention
+   for any table designed after this point.
+8. ⏳ In progress / not started: `render.yaml` now lists all 4 backend services
    (including `loan-ledger-service`) but the Render dashboard step to actually apply
    the blueprint/repoint the live deployment hasn't happened yet (see "Live access
    points" above); auth/per-user screen permissions; a migration tool; the
    per-installment ledger sketch (owner TBD, see Database schema above); extending
-   `.git/hooks/post-commit` to cover the four new modules; write endpoints for
-   `lon_acct_base` (원장조회 is currently read-only); actually using `rate_change_type_cd`/
-   `rate_change_cycle` in interest/schedule calculation (currently display-only, see
-   Database schema above).
+   `.git/hooks/post-commit` to cover the four new modules; actually using
+   `rate_change_type_cd`/`rate_change_cycle` in interest/schedule calculation (currently
+   display-only, see Database schema above); re-applying the 2026-08-11 CRUD/QueryDSL schema
+   assumptions to the production Supabase project (same manual-`psql`-style gap as item 6).
 
 When picking up new work here, check which of these is actually true in the repo before
 assuming the next step — don't trust an older draft of this list over what you actually find.
