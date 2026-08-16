@@ -320,6 +320,27 @@
   .modal-message { font-size: 14px; color: var(--color-body); margin-bottom: var(--space-xl); white-space: pre-wrap; }
   .modal button.primary { margin-top: 0; }
 
+  /* 라벨 옆 "규칙 보기" 버튼 -- 클릭하면 해당 항목에 적용된 계산/설정 규칙을 팝업으로 보여준다. */
+  .info-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-left: 4px;
+    border: 1px solid var(--color-muted);
+    border-radius: 50%;
+    background: var(--color-canvas);
+    color: var(--color-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+  .info-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-weak-bg); }
+
   /* Mobile overrides come last so they win over the base .sidebar/.content rules above */
   @media (max-width: 768px) {
     .hamburger-btn { display: flex; }
@@ -377,7 +398,7 @@
             <select id="i-loanTermYears"></select>
           </div>
           <div class="field">
-            <label for="i-referenceDate">계산기준일자</label>
+            <label for="i-referenceDate">계산기준일자 <button type="button" class="info-btn" data-rule="interestReferenceDateRule">!</button></label>
             <input type="date" id="i-referenceDate" />
           </div>
           <div class="field">
@@ -407,7 +428,7 @@
             <input type="text" inputmode="numeric" id="i-partialRepaymentAmount" placeholder="예: 10,000,000" />
           </div>
           <div class="field">
-            <label>중도상환수수료율 (%)</label>
+            <label>중도상환수수료율 (%) <button type="button" class="info-btn" data-rule="earlyRepayFeeRule">!</button></label>
             <div class="rate-pair">
               <input type="text" inputmode="decimal" id="i-feeRate" value="1" />
               <label class="checkbox-label"><input type="checkbox" id="i-feeExempt" /> 면제</label>
@@ -418,7 +439,7 @@
       </div>
 
       <div class="card">
-        <h2>결과</h2>
+        <h2>결과 <button type="button" class="info-btn" data-rule="repayMethodRule">!</button></h2>
         <div class="tabs">
           <button class="tab-btn active" data-type="EQUAL_PRINCIPAL_AND_INTEREST">원리금균등상환</button>
           <button class="tab-btn" data-type="EQUAL_PRINCIPAL">원금균등상환</button>
@@ -451,7 +472,7 @@
         <h2>계좌 조회</h2>
         <div style="display:flex; gap: var(--space-md); align-items:flex-end;">
           <div class="field" style="flex:1; margin:0;">
-            <label for="c-acctNo">계좌번호</label>
+            <label for="c-acctNo">계좌번호 <button type="button" class="info-btn" data-rule="acctNoRule">!</button></label>
             <input type="text" id="c-acctNo" readonly placeholder="계좌 검색으로 선택하세요" />
           </div>
           <div class="field" style="width:76px; flex-shrink:0; margin:0;">
@@ -469,7 +490,7 @@
           <div class="field"><label for="c-custNo">고객번호</label><input type="text" inputmode="numeric" id="c-custNo" maxlength="10" placeholder="예: 2026000001 (10자리)" /></div>
           <div class="field"><label for="c-custName">고객명</label><input type="text" id="c-custName" placeholder="예: 홍길동" /></div>
           <div class="field c-auto-field">
-            <label for="c-acctStatCd">계좌상태</label>
+            <label for="c-acctStatCd">계좌상태 <button type="button" class="info-btn" data-rule="autoSetRule">!</button></label>
             <select id="c-acctStatCd">
               <option value="01">정상</option>
               <option value="03">정리</option>
@@ -490,12 +511,12 @@
           <div class="field c-auto-field"><label for="c-loanBalAmt">대출잔액 (원)</label><input type="text" inputmode="numeric" id="c-loanBalAmt" placeholder="예: 100,000,000" /></div>
           <div class="field"><label for="c-newDt">신규일자</label><input type="text" inputmode="numeric" id="c-newDt" maxlength="10" placeholder="예: 20560816" /></div>
           <div class="field"><label for="c-matDt">만기일자</label><input type="text" inputmode="numeric" id="c-matDt" maxlength="10" placeholder="예: 20560816" /></div>
-          <div class="field c-auto-field"><label for="c-nextIntPayDt">다음이자납입일자</label><input type="text" inputmode="numeric" id="c-nextIntPayDt" maxlength="10" placeholder="예: 20560816" /></div>
+          <div class="field c-auto-field"><label for="c-nextIntPayDt">다음이자납입일자 <button type="button" class="info-btn" data-rule="nextPayDateRule">!</button></label><input type="text" inputmode="numeric" id="c-nextIntPayDt" maxlength="10" placeholder="예: 20560816" /></div>
           <div class="field c-auto-field"><label for="c-nextRepayDt">다음상환일자</label><input type="text" inputmode="numeric" id="c-nextRepayDt" maxlength="10" placeholder="예: 20560816" /></div>
           <div class="field c-auto-field"><label for="c-lastIntPayDt">최종이자납입일자</label><input type="text" inputmode="numeric" id="c-lastIntPayDt" maxlength="10" placeholder="예: 20560816" /></div>
           <div class="field c-auto-field"><label for="c-lastRepayDt">최종상환일자</label><input type="text" inputmode="numeric" id="c-lastRepayDt" maxlength="10" placeholder="예: 20560816" /></div>
-          <div class="field c-auto-field"><label for="c-deadlineLossDt">기한이익상실일자</label><input type="text" inputmode="numeric" id="c-deadlineLossDt" maxlength="10" placeholder="예: 20560916" /></div>
-          <div class="field"><label for="c-monthlyIntPayDay">매월이자납입일</label><input type="text" inputmode="numeric" id="c-monthlyIntPayDay" maxlength="2" placeholder="예: 10 (1~31, 2자리)" /></div>
+          <div class="field c-auto-field"><label for="c-deadlineLossDt">기한이익상실일자 <button type="button" class="info-btn" data-rule="deadlineLossRule">!</button></label><input type="text" inputmode="numeric" id="c-deadlineLossDt" maxlength="10" placeholder="예: 20560916" /></div>
+          <div class="field"><label for="c-monthlyIntPayDay">매월이자납입일 <button type="button" class="info-btn" data-rule="nextPayDateRule">!</button></label><input type="text" inputmode="numeric" id="c-monthlyIntPayDay" maxlength="2" placeholder="예: 10 (1~31, 2자리)" /></div>
           <div class="field">
             <label>기준금리 + 가산금리 = 적용금리 (%)</label>
             <div class="rate-pair">
@@ -607,7 +628,7 @@
           <div class="field"><label>기한이익상실일자</label><input type="text" id="d-deadlineLossDt" readonly placeholder="계좌 선택 시 표시" /></div>
         </div>
         <div class="grid" style="margin-top: var(--space-md);">
-          <div class="field"><label for="d-referenceDate">계산기준일자</label><input type="date" id="d-referenceDate" /></div>
+          <div class="field"><label for="d-referenceDate">계산기준일자 <button type="button" class="info-btn" data-rule="paymentStatusRule">!</button></label><input type="date" id="d-referenceDate" /></div>
         </div>
         <button class="primary" id="d-calcBtn" disabled>1회차 계산하기</button>
       </div>
@@ -626,6 +647,14 @@
     <div class="modal-title">오류</div>
     <div class="modal-message" id="errorModalMessage"></div>
     <button type="button" class="primary" id="errorModalCloseBtn">확인</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ruleInfoModalOverlay">
+  <div class="modal">
+    <div class="modal-title" id="ruleInfoModalTitle"></div>
+    <div class="modal-message" id="ruleInfoModalMessage"></div>
+    <button type="button" class="primary" id="ruleInfoModalCloseBtn">확인</button>
   </div>
 </div>
 
@@ -757,6 +786,99 @@ function closeErrorModal() {
 $('errorModalCloseBtn').addEventListener('click', closeErrorModal);
 $('errorModalOverlay').addEventListener('click', (e) => {
   if (e.target === $('errorModalOverlay')) closeErrorModal();
+});
+
+// ---------- 규칙 보기 팝업 (라벨 옆 (!) 버튼) ----------
+// 화면 곳곳에서 적용 중인 채번/계산 규칙을 한눈에 확인할 수 있도록, 코드에 이미 구현된
+// 규칙을 사람이 읽을 문장으로만 요약한다 -- 로직을 여기서 다시 구현하지 않는다.
+const RULE_INFO = {
+  acctNoRule: {
+    title: '계좌번호 채번 규칙',
+    items: [
+      '계좌번호 = 신규일자(8자리) + 과목코드(2자리) + 일련번호(4자리)',
+      '일련번호는 과목코드별로 0001부터 자동으로 순서대로 부여됩니다 (날짜가 바뀌어도 리셋되지 않고 계속 증가).',
+      '직접 입력할 수 없고, 등록 시 자동으로 채번됩니다.'
+    ]
+  },
+  autoSetRule: {
+    title: '신규 계좌 자동 설정 규칙',
+    items: [
+      '계좌상태는 항상 "정상"으로 개설됩니다.',
+      '최종이자납입일자 / 최종상환일자는 신규일자와 동일하게 설정됩니다.',
+      '대출잔액은 대출한도와 동일하게 설정됩니다 (부대비용 등으로 달라지는 경우는 아직 반영되지 않음).'
+    ]
+  },
+  nextPayDateRule: {
+    title: '다음이자납입일자 계산 규칙',
+    items: [
+      '신규일자가 속한 달의 "매월이자납입일"로 먼저 계산합니다.',
+      '그 날짜까지 15일이 안 남았거나 이미 지났으면, 다음 달로 미룹니다.',
+      '예) 8/12 신규, 매월납입일 15일 → 8/15는 3일 뒤라서 이월되어 다음이자납입일자는 9/15로 설정됩니다.',
+      '다음상환일자도 같은 날짜로 함께 설정됩니다.'
+    ]
+  },
+  deadlineLossRule: {
+    title: '기한이익상실일자 계산 규칙',
+    items: [
+      '기한이익상실일자 = 다음이자납입일자 + 1개월로 자동 설정됩니다.'
+    ]
+  },
+  paymentStatusRule: {
+    title: '정상 / 연체 / 기한이익상실 판정 규칙',
+    items: [
+      '계산기준일자가 "다음이자납입일자 + 1영업일(공휴일 제외)" 이전이면 정상입니다.',
+      '그 날짜를 지나면 연체로 판정되고, 해당 회차의 원금 + 이자 모두에 연체이율이 적용됩니다.',
+      '계산기준일자가 기한이익상실일자를 지나면, 회차 구분 없이 남은 원금 전체에 연체이율이 적용됩니다.',
+      '연체이율 = 적용금리 + 3%p (가산이율)'
+    ]
+  },
+  interestReferenceDateRule: {
+    title: '계산기준일자 기준 선납/연체 이자 규칙',
+    items: [
+      '이 화면은 신규일자 + 1개월을 기준납입일로 보는 단순 시뮬레이션입니다 (실제 계좌의 다음이자납입일자가 아님).',
+      '계산기준일자가 기준납입일보다 빠르면, 그 일수만큼 선납이자를 차감합니다.',
+      '계산기준일자가 기준납입일보다 늦으면, 그 일수만큼 연체이자(원금 + 이자 모두에 연체이율 적용)를 가산합니다.',
+      '연체이율 = 적용금리 + 3%p (가산이율)'
+    ]
+  },
+  earlyRepayFeeRule: {
+    title: '중도상환수수료 계산 / 면제 규칙',
+    items: [
+      '수수료 = 상환금액 × 수수료율 × (잔여기간 ÷ 전체대출기간)',
+      '신규일자로부터 3년이 지나면 전액 면제됩니다.',
+      '일부상환금액이 대출잔액의 연 10% 이내면, 그 상환분은 면제됩니다.',
+      '신규일자로부터 14일 이내(청약철회 가능 기간)에는 별도로 안내됩니다.'
+    ]
+  },
+  repayMethodRule: {
+    title: '상환방식별 계산 방식',
+    items: [
+      '원리금균등: 매달 갚는 총액이 항상 동일합니다 (초반엔 이자 비중이 크고, 갈수록 원금 비중이 커짐).',
+      '원금균등: 매달 원금은 동일하고, 잔액이 줄면서 이자도 함께 줄어 총 납입액이 점점 감소합니다.',
+      '만기일시: 매달 이자만 내다가, 마지막 달에 원금 전액을 한 번에 상환합니다.'
+    ]
+  }
+};
+
+function showRuleInfo(key) {
+  const rule = RULE_INFO[key];
+  if (!rule) return;
+  $('ruleInfoModalTitle').textContent = rule.title;
+  $('ruleInfoModalMessage').textContent = rule.items.map(item => `• ${item}`).join('\n\n');
+  $('ruleInfoModalOverlay').classList.add('open');
+}
+function closeRuleInfoModal() {
+  $('ruleInfoModalOverlay').classList.remove('open');
+}
+$('ruleInfoModalCloseBtn').addEventListener('click', closeRuleInfoModal);
+$('ruleInfoModalOverlay').addEventListener('click', (e) => {
+  if (e.target === $('ruleInfoModalOverlay')) closeRuleInfoModal();
+});
+// 이벤트 위임 -- 화면 어디에 .info-btn을 추가하든(지금 있는 곳이든 나중에 추가하는 곳이든)
+// 개별로 리스너를 달 필요 없이 여기 한 곳에서 처리된다.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.info-btn');
+  if (btn) showRuleInfo(btn.dataset.rule);
 });
 
 // ---------- Account search popup (이자계산/원장조회 화면 공용) ----------

@@ -386,6 +386,30 @@ should reuse this modal/callback pattern rather than building another one. `rate
 all top-level helpers (defined once, above the account-search popup IIFE) — reuse them from any
 view rather than redefining local copies (an earlier version had `원장조회` shadow half of these).
 
+**"룰 상세보기" info buttons, 2026-08-16**: a small circular `.info-btn` (`!`) can go next to any
+label wherever a non-obvious business rule applies to that field — clicking it opens the shared
+`#ruleInfoModalOverlay` with a plain-language bullet list of what the rule actually does. This is
+explicitly *not* meant to explain the code — it's a "what condition is this field governed by"
+cheat sheet for someone using the screen, so keep each entry to a few short bullets, no jargon.
+Mechanism: every button carries `data-rule="someKey"` matching a key in the shared `RULE_INFO`
+object (defined once, top-level, near `showErrorModal`); a single delegated
+`document.addEventListener('click', ...)` (not a per-button listener) opens the modal via
+`showRuleInfo(key)`, so dropping a new `<button type="button" class="info-btn"
+data-rule="...">!</button>` next to any label anywhere just works without wiring anything else up.
+Reuses the existing `.modal-overlay`/`.modal-message` component (same one `showErrorModal` uses,
+`white-space: pre-wrap` renders the `• ` bulleted lines from a plain string — deliberately kept
+as `.textContent`, not `.innerHTML`, matching how every other modal in this file is filled).
+Current rule keys and where they're attached: `acctNoRule` (계좌생성's 계좌번호 label — 채번 규칙),
+`autoSetRule` (계좌생성's 계좌상태 label — 신규 계좌 자동 설정 규칙), `nextPayDateRule`
+(계좌생성's 매월이자납입일 + 다음이자납입일자 labels — 15일 미만 이월 규칙), `deadlineLossRule`
+(계좌생성's 기한이익상실일자 label), `paymentStatusRule` (입금의 계산기준일자 label — 정상/연체/
+기한이익상실 판정), `interestReferenceDateRule` (이자계산의 계산기준일자 label — 이 화면 고유의
+"신규일자+1개월을 기준납입일로 보는 단순화" 전제를 명시), `earlyRepayFeeRule` (이자계산의
+중도상환수수료율 label), `repayMethodRule` (이자계산 결과 카드 제목 — 원리금균등/원금균등/
+만기일시 계산 방식). When a new business rule gets built (e.g. CUSSEQ 실제 연결, 부대비용 반영),
+add its info button + `RULE_INFO` entry alongside the change, same as this batch did — don't let
+this cheat sheet drift from what the code actually does.
+
 **이자계산 vs 입금 split** (2026-08-05): 이자계산 was originally the only calculator and grew a
 계좌번호 search box that filled its manual-entry fields from a real ledger account. The user
 asked to separate those two concerns: 이자계산 is now a **pure simulation** screen (manual
