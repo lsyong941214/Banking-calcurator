@@ -101,8 +101,12 @@ below for why that distinction matters here):
   `/accounts/search`'s AND-combined optional filters were rebuilt on QueryDSL
   (`LonAcctBaseRepositoryCustom`/`Impl`, `JPAQueryFactory` bean in `QuerydslConfig`) instead
   of the earlier JPQL `'' OR` string-hack — see "Table relationships & ORM fetch strategy"
-  below for the standing convention this set going forward. `loan-calcurator` has a
-  matching **계좌생성** screen (sidebar, above 원장조회) that exercises all four endpoints —
+  below for the standing convention this set going forward. **As of 2026-08-16, `POST
+  /accounts` no longer takes `acctNo`/`acctSeqNo`/`acctStatCd`/`loanBalAmt`/the four
+  최종·다음납입일자 fields/`deadlineLossDt`** — `LedgerAccountService.register()` derives all of
+  them server-side (채번 + business rules, see UI section's "계좌번호 auto-numbering" note below)
+  from a slimmed `LedgerAccountCreateRequest`; `PUT`/`DELETE` are unchanged. `loan-calcurator`
+  has a matching **계좌생성** screen (sidebar, above 원장조회) that exercises all four endpoints —
   see UI section.
 - **PostgreSQL**: chosen specifically for `NUMERIC` precision and transactions — required
   for money, never optional.
@@ -367,14 +371,46 @@ the selected account's own dates/rates/balance to call `loan-schedule-service` a
 this real account look like?") from 이자계산's "as of an arbitrary reference date" calculation,
 so it deliberately doesn't reuse 이자계산's engine-service call or repayment-method tabs.
 
-**계좌생성 screen** (added 2026-08-11, sidebar item above 원장조회): the CRUD counterpart to
-원장조회's read-only list. 신규 등록 모드 vs 수정 모드 toggle by whether an account was loaded
-(via PK입력+"계좌번호로 불러오기", or via the shared account-search popup) — PK fields
-(`acctNo`/`acctSeqNo`) go readonly once in edit mode, matching the backend's PUT semantics
-(PK immutable after 등록). Reuses the same amount/rate-formatting helpers and the shared
-account-search popup as every other screen — don't re-implement those locally here either.
-삭제 uses a native `confirm()`, not a custom modal (kept intentionally lightweight, not a gap
-to fix later unless the user asks for one).
+**계좌생성 screen** (added 2026-08-11, sidebar item above 원장조회; redesigned 2026-08-16): the
+CRUD counterpart to 원장조회's read-only list. Reuses the same amount/rate-formatting helpers
+and the shared account-search popup as every other screen — don't re-implement those locally
+here either. 삭제 uses a native `confirm()`, not a custom modal (kept intentionally lightweight,
+not a gap to fix later unless the user asks for one).
+
+**처리구분 (등록/변경/삭제) redesign, 2026-08-16**: this screen has no standalone 조회 mode —
+it exists to create/change/remove one ledger record, not to browse. A `#c-txnType` select next
+to the 초기화 button (top-right) drives everything, replacing the old "새 계좌 등록" /
+"계좌번호로 불러오기" buttons and the implicit edit-mode-by-loaded-PK toggle:
+- **등록**: the "계좌 조회" card (PK fields + 계좌검색 버튼) is hidden entirely, and so are the
+  7 fields the backend now auto-derives (see below) — only the 13 fields the user actually
+  supplies are shown. A single `#c-submitBtn` at the bottom (label/style follow `txnType`) POSTs
+  a slimmed `LedgerAccountCreateRequest`. On success the screen flips itself to **변경** mode and
+  fills the form with the server's response (via the same `fillFormForEdit` used by the search
+  popup) so the caller can see what got auto-generated, without a separate 조회 step.
+- **변경 / 삭제**: the "계좌 조회" card is shown; the *only* way to load a target account is the
+  shared account-search popup (`window.openAccountSearchModal(fillFormForEdit)`) — manual
+  PK-entry lookup was removed as redundant with it. 변경 leaves every non-PK field editable;
+  삭제 locks the whole form (`readOnly`/`disabled`, via `LOCKABLE_FIELD_IDS`) as a read-only
+  confirmation view before the native `confirm()`. `#c-submitBtn` dispatches to PUT/DELETE and
+  requires an account to already be loaded (`editingAccount`), else shows the error modal.
+- Switching `#c-txnType` clears the form (`resetForm`) and re-applies visibility/lock state
+  (`applyTxnType`) for the new mode; `#c-resetBtn` additionally forces `txnType` back to 등록.
+
+**계좌번호 auto-numbering + derived-field rules, 2026-08-16**: 계좌번호/계좌일련번호 are no
+longer user input on this screen — `loan-ledger-service`'s `LedgerAccountService.register()`
+computes them, plus the ledger columns that aren't really "new account" input:
+- **채번**: `acctNo = {신규일자:YYYYMMDD}{과목코드:2}{일련번호:4}` (matches the existing seed-data
+  shape, e.g. `20210610010001`), 일련번호 increments from `0001` within that 신규일자+과목 combo
+  (`LonAcctBaseRepository.findFirstByAcctNoStartingWithOrderByAcctNoDesc` finds the current max).
+  `acctSeqNo` is always `1` for a brand-new account — this screen only creates new accounts, not
+  additional 회차 under an existing `acctNo` (그런 케이스는 별도 요청 시 다시 설계).
+- **자동 설정 규칙** (모두 서버 계산, 화면은 입력받지 않음): 계좌상태 = 정상(`01`);
+  최종이자납입일자/최종상환일자 = 신규일자; 대출잔액 = 대출한도 그대로(향후 부대비용 등으로
+  달라질 수 있음, 아직 미구현); 다음이자납입일자 = 다음상환일자 = 신규일자가 속한 달의
+  매월이자납입일 후보(`YearMonth`로 말일 clamp)와 신규일자 사이가 **15일 미만**이면 익월로
+  이월(`computeNextPayDate`) — 예: 8/12 신규 + 매월납입일 15일 → 다음이자납입일자 9/15;
+  기한이익상실일자 = 다음이자납입일자 + 1개월. 이 15일 임계값은 사용자가 준 예시 하나로부터
+  역산한 것("<15면 이월") — 반대 경계(`<=15`)로 확인되면 `MIN_GRACE_DAYS` 상수만 바꾸면 된다.
 
 ## Development roadmap
 
