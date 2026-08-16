@@ -6,6 +6,7 @@ import com.example.ledger.dto.LedgerAccountCreateRequest;
 import com.example.ledger.dto.LedgerAccountResponse;
 import com.example.ledger.dto.LedgerAccountUpdateRequest;
 import com.example.ledger.repository.LonAcctBaseRepository;
+import com.example.ledger.repository.SeqCounterRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -23,11 +24,15 @@ public class LedgerAccountService {
     private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
     // 신규일자로부터 이자납입일까지 이 일수 미만이면 첫 이자납입을 익월로 이월한다(최소 유예기간).
     private static final int MIN_GRACE_DAYS = 15;
+    // seq_counter.seq_cd -- 계좌번호 채번룰. 구분값(seq_div_cd)은 과목코드(01/02/03).
+    private static final String SEQ_CD_ACCT_NO = "LONSEQ";
 
     private final LonAcctBaseRepository lonAcctBaseRepository;
+    private final SeqCounterRepository seqCounterRepository;
 
-    public LedgerAccountService(LonAcctBaseRepository lonAcctBaseRepository) {
+    public LedgerAccountService(LonAcctBaseRepository lonAcctBaseRepository, SeqCounterRepository seqCounterRepository) {
         this.lonAcctBaseRepository = lonAcctBaseRepository;
+        this.seqCounterRepository = seqCounterRepository;
     }
 
     public List<LedgerAccountResponse> search(String keyword) {
@@ -130,17 +135,16 @@ public class LedgerAccountService {
         return day;
     }
 
-    // 채번룰: {신규일자:YYYYMMDD}{과목코드:2자리}{일련번호:4자리}, 일련번호는 해당 신규일자+과목
-    // 조합 내에서 0001부터 순증. 기존 시드 데이터(예: 20210610010001)와 동일한 형식.
+    // 채번룰: {신규일자:YYYYMMDD}{과목코드:2자리}{일련번호:4자리}, 일련번호는 seq_counter의
+    // (LONSEQ, 과목코드) 카운터에서 원자적으로 발급받는다 -- 과목코드별로 계속 누적되고 날짜별로
+    // 리셋되지 않지만, 계좌번호 자체에 신규일자가 이미 포함돼 있어 유일성은 그대로 보장된다.
+    // 기존 시드 데이터(예: 20210610010001)와 동일한 문자열 형식.
     private String generateAcctNo(String newDt, String itemCd) {
-        String prefix = newDt + itemCd;
-        int nextSeq = lonAcctBaseRepository.findFirstByAcctNoStartingWithOrderByAcctNoDesc(prefix)
-                .map(a -> Integer.parseInt(a.getAcctNo().substring(prefix.length())) + 1)
-                .orElse(1);
+        int nextSeq = seqCounterRepository.incrementAndGetNextSeq(SEQ_CD_ACCT_NO, itemCd);
         if (nextSeq > 9999) {
-            throw new IllegalArgumentException("해당 일자/과목의 계좌 채번 범위(9999건)를 초과했습니다: " + prefix);
+            throw new IllegalArgumentException("해당 과목의 계좌 채번 범위(9999건)를 초과했습니다: " + itemCd);
         }
-        return prefix + String.format("%04d", nextSeq);
+        return newDt + itemCd + String.format("%04d", nextSeq);
     }
 
     // 신규일자 기준 이 달의 매월이자납입일 후보가 15일 미만의 유예기간만 남는다면(이미 지났거나

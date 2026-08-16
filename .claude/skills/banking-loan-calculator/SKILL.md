@@ -248,10 +248,11 @@ calculation logic (each keeps its own small copy of the `RepaymentType` enum —
 library between services, by design, for real independence).
 
 Local DB comes up via `docker-compose up -d` at the repo root (postgres:15-alpine, db `loandb`,
-mounts `db/init.sql`, `db/init_ledger.sql`, `db/init_holiday.sql`, and `db/init_customer.sql` —
-numbered `01`-`04` in the compose mount paths so they apply in dependency order, since
-`init_customer.sql` reads from `lon_acct_base` and must run after `init_ledger.sql`).
-**This dev Mac doesn't have Docker
+mounts `db/init.sql`, `db/init_ledger.sql`, `db/init_holiday.sql`, `db/init_customer.sql`, and
+`db/init_seq_counter.sql` — numbered `01`-`05` in the compose mount paths so they apply in
+dependency order, since `init_customer.sql` reads from `lon_acct_base` and must run after
+`init_ledger.sql`; `init_seq_counter.sql` has no such data dependency but is kept last for
+simplicity). **This dev Mac doesn't have Docker
 installed** — verified the schema and `loan-code-service`/`loan-ledger-service` end-to-end via
 a manually-started Homebrew `postgresql@15` instance instead (same `loandb`/`loanuser`/
 `loanpassword` creds as `docker-compose.yml`, so switching to real Docker later needs no config
@@ -425,10 +426,30 @@ to the 초기화 button (top-right) drives everything, replacing the old "새 �
 longer user input on this screen — `loan-ledger-service`'s `LedgerAccountService.register()`
 computes them, plus the ledger columns that aren't really "new account" input:
 - **채번**: `acctNo = {신규일자:YYYYMMDD}{과목코드:2}{일련번호:4}` (matches the existing seed-data
-  shape, e.g. `20210610010001`), 일련번호 increments from `0001` within that 신규일자+과목 combo
-  (`LonAcctBaseRepository.findFirstByAcctNoStartingWithOrderByAcctNoDesc` finds the current max).
-  `acctSeqNo` is always `1` for a brand-new account — this screen only creates new accounts, not
-  additional 회차 under an existing `acctNo` (그런 케이스는 별도 요청 시 다시 설계).
+  shape, e.g. `20210610010001`). `acctSeqNo` is always `1` for a brand-new account — this screen
+  only creates new accounts, not additional 회차 under an existing `acctNo` (그런 케이스는 별도
+  요청 시 다시 설계).
+- **채번 카운터 테이블, 2026-08-16 재설계**: the 일련번호 portion is issued by a generic
+  `seq_counter` table ([../../../db/init_seq_counter.sql](../../../db/init_seq_counter.sql)),
+  not by scanning `lon_acct_base` for the current max anymore (that earlier approach — "find the
+  largest `acctNo` with this prefix, +1" — had a real race condition: two concurrent registrations
+  for the same prefix could both read the same max and generate the same next number, only caught
+  after the fact by the PK unique constraint). `seq_counter` PK is `(seq_cd, seq_div_cd)` —
+  `seq_cd` is the **채번룰코드** (`LONSEQ`=계좌번호, `CUSSEQ`=고객번호, reserved for future
+  고객원장 registration — not called by anything yet), `seq_div_cd` is a per-rule discriminator
+  (`LONSEQ` uses 과목코드 `01`/`02`/`03`; `CUSSEQ`'s discriminator is seeded with `01`=개인 but
+  unused). `SeqCounterRepository.incrementAndGetNextSeq()` does the whole increment as one
+  native `INSERT ... ON CONFLICT (seq_cd, seq_div_cd) DO UPDATE SET next_seq = next_seq + 1
+  RETURNING next_seq` statement — atomic at the Postgres row level, so concurrent callers for the
+  same `(seq_cd, seq_div_cd)` always get distinct values (load-tested locally with 10 concurrent
+  registrations for the same 과목코드, got `0001`-`0010` with zero collisions). **`LONSEQ`'s
+  discriminator deliberately excludes 신규일자** — unlike the old prefix-scan approach, the
+  counter does not reset daily; it just keeps incrementing per 과목코드 forever. This is safe
+  because `acctNo` itself still embeds 신규일자 as its own prefix, so global uniqueness doesn't
+  depend on daily reset — and *not* keying by date avoids `seq_counter` growing a new row every
+  single day forever. One consequence: the per-과목코드 capacity is now **9,999 accounts total**
+  (not per day) before `generateAcctNo` throws `IllegalArgumentException` — a smaller number than
+  it sounds, but this is a demo/learning project, not a real bank's volume.
 - **자동 설정 규칙** (모두 서버 계산, 화면은 입력받지 않음): 계좌상태 = 정상(`01`);
   최종이자납입일자/최종상환일자 = 신규일자; 대출잔액 = 대출한도 그대로(향후 부대비용 등으로
   달라질 수 있음, 아직 미구현); 다음이자납입일자 = 다음상환일자 = 신규일자가 속한 달의

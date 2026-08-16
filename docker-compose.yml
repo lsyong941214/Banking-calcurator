@@ -15,6 +15,7 @@ services:
       - ./db/init_ledger.sql:/docker-entrypoint-initdb.d/02-init_ledger.sql
       - ./db/init_holiday.sql:/docker-entrypoint-initdb.d/03-init_holiday.sql
       - ./db/init_customer.sql:/docker-entrypoint-initdb.d/04-init_customer.sql
+      - ./db/init_seq_counter.sql:/docker-entrypoint-initdb.d/05-init_seq_counter.sql
       - loan-db-data:/var/lib/postgresql/data
 
 volumes:
