@@ -1233,6 +1233,19 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   // 처리구분에 따라 잠글(readonly/disabled) 입력 필드 전체 -- acctNo/acctSeqNo는 항상 readonly라 제외.
   const LOCKABLE_FIELD_IDS = ['custNo', 'custName', 'itemCd', 'loanLimitAmt', 'newDt', 'matDt', 'monthlyIntPayDay',
     'baseRate', 'addRate', 'earlyRepayFeeRate', 'repayMethodCd', 'rateChangeTypeCd', 'rateChangeCycle', ...AUTO_FIELD_IDS];
+  // 처리(등록/변경) 전 필수입력 검증 메시지 -- 등록은 loanBalAmt 제외, 변경은 전부 포함(validateFormForSubmit 참고).
+  const REQUIRED_FIELD_MESSAGES = {
+    custNo: '고객번호는 필수입력사항입니다.',
+    custName: '고객명은 필수입력사항입니다.',
+    loanLimitAmt: '대출한도는 필수입력사항입니다.',
+    newDt: '신규일자는 필수입력사항입니다.',
+    matDt: '만기일자는 필수입력사항입니다.',
+    monthlyIntPayDay: '매월이자납입일은 필수입력사항입니다.',
+    baseRate: '기준금리는 필수입력사항입니다.',
+    addRate: '가산금리는 필수입력사항입니다.',
+    earlyRepayFeeRate: '조기상환수수료율은 필수입력사항입니다.',
+    loanBalAmt: '대출잔액은 필수입력사항입니다.'
+  };
 
   ['c-loanLimitAmt', 'c-loanBalAmt'].forEach(id => attachAmountFormatting($(id)));
   ['c-baseRate', 'c-addRate', 'c-earlyRepayFeeRate'].forEach(id => attachRateFormatting($(id)));
@@ -1268,6 +1281,29 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
       if (el.tagName === 'SELECT') el.disabled = locked;
       else el.readOnly = locked;
     });
+  }
+
+  // 등록/변경 처리 전 필수입력 검증 -- 첫 번째로 발견된 문제의 메시지를 반환, 문제 없으면 null.
+  function validateFormForSubmit() {
+    const requiredIds = txnType === 'UPDATE'
+      ? Object.keys(REQUIRED_FIELD_MESSAGES)
+      : Object.keys(REQUIRED_FIELD_MESSAGES).filter(id => id !== 'loanBalAmt');
+    for (const id of requiredIds) {
+      if (!$('c-' + id).value.trim()) return REQUIRED_FIELD_MESSAGES[id];
+    }
+    const monthlyDay = Number($('c-monthlyIntPayDay').value.trim());
+    if (!Number.isInteger(monthlyDay) || monthlyDay < 1 || monthlyDay > 31) {
+      return '매월이자납입일은 1~31 사이의 숫자로 입력해주세요.';
+    }
+    if ($('c-rateChangeTypeCd').value === '02' && !$('c-rateChangeCycle').value) {
+      return '금리변동주기는 변동금리 선택 시 필수입력사항입니다.';
+    }
+    const newDt = $('c-newDt').value;
+    const matDt = $('c-matDt').value;
+    if (newDt && matDt && matDt <= newDt) {
+      return '만기일자는 신규일자보다 이후 날짜로 입력해주세요.';
+    }
+    return null;
   }
 
   function updateLookupLabel() {
@@ -1327,6 +1363,10 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     $('c-itemCd').value = '01';
     $('c-repayMethodCd').value = '01';
     $('c-rateChangeTypeCd').value = '01';
+    // 등록 모드는 신규일자를 오늘 날짜로 기본 세팅 -- 변경/삭제는 계좌검색으로 값이 채워지므로 비워둔다.
+    if ($('c-txnType').value === 'CREATE') {
+      $('c-newDt').value = isoDate(new Date());
+    }
     updateLookupLabel();
     $('c-formMsg').style.display = 'none';
   }
@@ -1420,6 +1460,11 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   }
 
   async function submitRegister() {
+    const validationError = validateFormForSubmit();
+    if (validationError) {
+      showErrorModal(validationError);
+      return;
+    }
     const payload = buildCreatePayload();
     const btn = $('c-submitBtn');
     const original = btn.textContent;
@@ -1447,6 +1492,11 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
   }
 
   async function submitUpdate() {
+    const validationError = validateFormForSubmit();
+    if (validationError) {
+      showErrorModal(validationError);
+      return;
+    }
     const btn = $('c-submitBtn');
     const original = btn.textContent;
     btn.disabled = true;

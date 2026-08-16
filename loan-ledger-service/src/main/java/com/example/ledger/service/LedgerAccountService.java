@@ -12,6 +12,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -49,9 +50,17 @@ public class LedgerAccountService {
 
     // 신규 원장 개설. 계좌번호는 (신규일자+과목코드) 채번 규칙으로, 계좌상태/잔액/납입일자 등은
     // 아래 규칙으로 서버가 계산해서 채운다 -- 화면은 실제 입력이 필요한 항목만 보낸다.
+    // 화면에서 이미 필수값 검증을 하지만, API를 직접 호출하는 경우(curl 등)를 대비해 여기서도
+    // 검증한다 -- 검증 없이 바로 파싱하면 필수값 누락 시 NPE로 500(빈 메시지)이 나서 원인을 알 수 없었다.
     public LedgerAccountResponse register(LedgerAccountCreateRequest request) {
-        LocalDate newDate = LocalDate.parse(request.newDt(), YYYYMMDD);
-        int monthlyPayDay = Integer.parseInt(request.monthlyIntPayDay());
+        validateCreateRequest(request);
+
+        LocalDate newDate = parseDateOrThrow(request.newDt(), "신규일자");
+        LocalDate matDate = parseDateOrThrow(request.matDt(), "만기일자");
+        if (!matDate.isAfter(newDate)) {
+            throw new IllegalArgumentException("만기일자는 신규일자보다 이후 날짜여야 합니다.");
+        }
+        int monthlyPayDay = parseMonthlyPayDayOrThrow(request.monthlyIntPayDay());
 
         LocalDate nextPayDate = computeNextPayDate(newDate, monthlyPayDay);
         LocalDate deadlineLossDate = nextPayDate.plusMonths(1);
@@ -69,6 +78,56 @@ public class LedgerAccountService {
                 request.rateChangeTypeCd(), request.rateChangeCycle(), null);
 
         return LedgerAccountResponse.from(lonAcctBaseRepository.save(account));
+    }
+
+    // 화면이 보내야 하는 13개 입력 필드 전부 필수 -- 화면의 REQUIRED_FIELD_MESSAGES와 문구를 맞춘다
+    // (조사 은/는은 필드명 받침에 따라 다르므로 라벨 조합이 아니라 필드별 완성 문장을 그대로 쓴다).
+    private void validateCreateRequest(LedgerAccountCreateRequest request) {
+        requireText(request.custNo(), "고객번호는 필수입력사항입니다.");
+        requireText(request.custName(), "고객명은 필수입력사항입니다.");
+        requireText(request.itemCd(), "과목은 필수입력사항입니다.");
+        requireNonNull(request.loanLimitAmt(), "대출한도는 필수입력사항입니다.");
+        requireText(request.newDt(), "신규일자는 필수입력사항입니다.");
+        requireText(request.matDt(), "만기일자는 필수입력사항입니다.");
+        requireText(request.monthlyIntPayDay(), "매월이자납입일은 필수입력사항입니다.");
+        requireNonNull(request.baseRate(), "기준금리는 필수입력사항입니다.");
+        requireNonNull(request.addRate(), "가산금리는 필수입력사항입니다.");
+        requireNonNull(request.earlyRepayFeeRate(), "조기상환수수료율은 필수입력사항입니다.");
+        requireText(request.repayMethodCd(), "상환방식은 필수입력사항입니다.");
+        requireText(request.rateChangeTypeCd(), "금리유형은 필수입력사항입니다.");
+    }
+
+    private static void requireText(String value, String message) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    private static void requireNonNull(Object value, String message) {
+        if (value == null) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    private static LocalDate parseDateOrThrow(String value, String label) {
+        try {
+            return LocalDate.parse(value, YYYYMMDD);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(label + " 형식이 올바르지 않습니다: " + value);
+        }
+    }
+
+    private static int parseMonthlyPayDayOrThrow(String value) {
+        int day;
+        try {
+            day = Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("매월이자납입일은 숫자로 입력해주세요.");
+        }
+        if (day < 1 || day > 31) {
+            throw new IllegalArgumentException("매월이자납입일은 1~31 사이의 값이어야 합니다.");
+        }
+        return day;
     }
 
     // 채번룰: {신규일자:YYYYMMDD}{과목코드:2자리}{일련번호:4자리}, 일련번호는 해당 신규일자+과목
