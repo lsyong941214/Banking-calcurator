@@ -9,11 +9,19 @@ import com.example.ledger.repository.LonAcctBaseRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
 public class LedgerAccountService {
+
+    private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
+    // 신규일자로부터 이자납입일까지 이 일수 미만이면 첫 이자납입을 익월로 이월한다(최소 유예기간).
+    private static final int MIN_GRACE_DAYS = 15;
 
     private final LonAcctBaseRepository lonAcctBaseRepository;
 
@@ -39,17 +47,55 @@ public class LedgerAccountService {
         return LedgerAccountResponse.from(findOrThrow(acctNo, acctSeqNo));
     }
 
+    // 신규 원장 개설. 계좌번호는 (신규일자+과목코드) 채번 규칙으로, 계좌상태/잔액/납입일자 등은
+    // 아래 규칙으로 서버가 계산해서 채운다 -- 화면은 실제 입력이 필요한 항목만 보낸다.
     public LedgerAccountResponse register(LedgerAccountCreateRequest request) {
+        LocalDate newDate = LocalDate.parse(request.newDt(), YYYYMMDD);
+        int monthlyPayDay = Integer.parseInt(request.monthlyIntPayDay());
+
+        LocalDate nextPayDate = computeNextPayDate(newDate, monthlyPayDay);
+        LocalDate deadlineLossDate = nextPayDate.plusMonths(1);
+        String nextPayDt = nextPayDate.format(YYYYMMDD);
+
+        String acctNo = generateAcctNo(request.newDt(), request.itemCd());
+
         LonAcctBase account = new LonAcctBase(
-                request.acctNo(), request.acctSeqNo(), request.custNo(), request.custName(),
-                request.acctStatCd(), request.itemCd(), request.applyNo(), request.approvalNo(),
-                request.loanLimitAmt(), request.loanBalAmt(), request.newDt(), request.matDt(),
-                request.nextIntPayDt(), request.nextRepayDt(), request.lastIntPayDt(), request.lastRepayDt(),
-                request.deadlineLossDt(), request.monthlyIntPayDay(), request.baseRate(), request.addRate(),
+                acctNo, 1, request.custNo(), request.custName(),
+                "01", request.itemCd(), null, null,
+                request.loanLimitAmt(), request.loanLimitAmt(), request.newDt(), request.matDt(),
+                nextPayDt, nextPayDt, request.newDt(), request.newDt(),
+                deadlineLossDate.format(YYYYMMDD), request.monthlyIntPayDay(), request.baseRate(), request.addRate(),
                 request.applyRate(), request.earlyRepayFeeRate(), request.repayMethodCd(),
-                request.rateChangeTypeCd(), request.rateChangeCycle(), request.virtualAcctNo());
+                request.rateChangeTypeCd(), request.rateChangeCycle(), null);
 
         return LedgerAccountResponse.from(lonAcctBaseRepository.save(account));
+    }
+
+    // 채번룰: {신규일자:YYYYMMDD}{과목코드:2자리}{일련번호:4자리}, 일련번호는 해당 신규일자+과목
+    // 조합 내에서 0001부터 순증. 기존 시드 데이터(예: 20210610010001)와 동일한 형식.
+    private String generateAcctNo(String newDt, String itemCd) {
+        String prefix = newDt + itemCd;
+        int nextSeq = lonAcctBaseRepository.findFirstByAcctNoStartingWithOrderByAcctNoDesc(prefix)
+                .map(a -> Integer.parseInt(a.getAcctNo().substring(prefix.length())) + 1)
+                .orElse(1);
+        if (nextSeq > 9999) {
+            throw new IllegalArgumentException("해당 일자/과목의 계좌 채번 범위(9999건)를 초과했습니다: " + prefix);
+        }
+        return prefix + String.format("%04d", nextSeq);
+    }
+
+    // 신규일자 기준 이 달의 매월이자납입일 후보가 15일 미만의 유예기간만 남는다면(이미 지났거나
+    // 너무 임박) 익월로 이월한다 -- 예: 8/12 신규, 납입일 15일 → 8/15는 3일 뒤라 이월, 9/15로 설정.
+    private static LocalDate computeNextPayDate(LocalDate newDate, int monthlyPayDay) {
+        LocalDate candidate = clampToDay(YearMonth.from(newDate), monthlyPayDay);
+        if (ChronoUnit.DAYS.between(newDate, candidate) < MIN_GRACE_DAYS) {
+            candidate = clampToDay(YearMonth.from(newDate).plusMonths(1), monthlyPayDay);
+        }
+        return candidate;
+    }
+
+    private static LocalDate clampToDay(YearMonth yearMonth, int day) {
+        return yearMonth.atDay(Math.min(day, yearMonth.lengthOfMonth()));
     }
 
     public LedgerAccountResponse update(String acctNo, Integer acctSeqNo, LedgerAccountUpdateRequest request) {
