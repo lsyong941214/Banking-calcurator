@@ -215,6 +215,28 @@ installment, FK'd together) for per-installment payment history. Superseded for
 account-level data by `lon_acct_base` above; only build this if per-installment history is
 actually needed later, and ask which service should own it before doing so.
 
+**Implemented now, table + seed data only, no owning service/API/screen yet** (added
+2026-08-16): [../../../db/init_customer.sql](../../../db/init_customer.sql) — `cust_base`
+(고객원장), PK'd on `cust_no` alone (unlike `lon_acct_base`'s composite PK — this table is the
+one-row-per-customer master, `lon_acct_base` is 1:N against it, e.g. `cust_no` `2024000078` has
+2 `lon_acct_base` rows for its two 중도금대출 실행분 but one `cust_base` row). Columns: `cust_no`,
+`cust_name`, `birth_dt` (`VARCHAR(8)` `YYYYMMDD`, same date-as-string convention as
+`lon_acct_base`), `cust_stat_cd` (`01`=정상/`04`=해제/`09`=휴면, `CHECK`-constrained), `address`.
+Seeded by deduplicating `lon_acct_base`'s existing customers: `SELECT DISTINCT ON (cust_no) ...
+ORDER BY cust_no, acct_no, acct_seq_no` picks the cust_name from the smallest `acct_no`/
+`acct_seq_no` row per customer if a `cust_no` ever has conflicting names across rows (no such
+conflict exists in the current 5-row seed — `2024000078`'s two rows already agree on `이서연`).
+`birth_dt`/`cust_stat_cd`/`address` don't exist anywhere in `lon_acct_base`, so they're
+hardcoded plausible-but-fabricated demo values per customer, not derived from anything real.
+**No FK from `lon_acct_base.cust_no` to `cust_base.cust_no`** (kept simple for a demo, same
+choice as the `code_item` rule tables) and **no owning service or REST API built yet** — this
+was explicitly a "just create the table and register existing customers" request, not a
+"build a 고객관리 screen" one. Before adding an API/screen for this table, decide whether it
+becomes a new sibling module or folds into `loan-ledger-service` (it's tightly coupled to
+`lon_acct_base`, but per this file's own "split by business capability" test, 고객 관리 is
+arguably a distinct capability from 대출계좌 관리 — ask before building, same as the ledger
+owner question once was).
+
 **Every money or rate column must be `NUMERIC`, never `FLOAT`/`DOUBLE`** — non-negotiable for
 financial data, floating point drift compounds across months and produces balances that
 don't reconcile to zero at maturity.
@@ -226,7 +248,10 @@ calculation logic (each keeps its own small copy of the `RepaymentType` enum —
 library between services, by design, for real independence).
 
 Local DB comes up via `docker-compose up -d` at the repo root (postgres:15-alpine, db `loandb`,
-mounts both `db/init.sql` and `db/init_ledger.sql`). **This dev Mac doesn't have Docker
+mounts `db/init.sql`, `db/init_ledger.sql`, `db/init_holiday.sql`, and `db/init_customer.sql` —
+numbered `01`-`04` in the compose mount paths so they apply in dependency order, since
+`init_customer.sql` reads from `lon_acct_base` and must run after `init_ledger.sql`).
+**This dev Mac doesn't have Docker
 installed** — verified the schema and `loan-code-service`/`loan-ledger-service` end-to-end via
 a manually-started Homebrew `postgresql@15` instance instead (same `loandb`/`loanuser`/
 `loanpassword` creds as `docker-compose.yml`, so switching to real Docker later needs no config
