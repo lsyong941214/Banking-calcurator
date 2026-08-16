@@ -488,13 +488,13 @@
           </div>
           <div class="field"><label for="c-loanLimitAmt">대출한도 (원)</label><input type="text" inputmode="numeric" id="c-loanLimitAmt" placeholder="예: 100,000,000" /></div>
           <div class="field c-auto-field"><label for="c-loanBalAmt">대출잔액 (원)</label><input type="text" inputmode="numeric" id="c-loanBalAmt" placeholder="예: 100,000,000" /></div>
-          <div class="field"><label for="c-newDt">신규일자</label><input type="date" id="c-newDt" /></div>
-          <div class="field"><label for="c-matDt">만기일자</label><input type="date" id="c-matDt" /></div>
-          <div class="field c-auto-field"><label for="c-nextIntPayDt">다음이자납입일자</label><input type="date" id="c-nextIntPayDt" /></div>
-          <div class="field c-auto-field"><label for="c-nextRepayDt">다음상환일자</label><input type="date" id="c-nextRepayDt" /></div>
-          <div class="field c-auto-field"><label for="c-lastIntPayDt">최종이자납입일자</label><input type="date" id="c-lastIntPayDt" /></div>
-          <div class="field c-auto-field"><label for="c-lastRepayDt">최종상환일자</label><input type="date" id="c-lastRepayDt" /></div>
-          <div class="field c-auto-field"><label for="c-deadlineLossDt">기한이익상실일자</label><input type="date" id="c-deadlineLossDt" /></div>
+          <div class="field"><label for="c-newDt">신규일자</label><input type="text" inputmode="numeric" id="c-newDt" maxlength="10" placeholder="예: 20560816" /></div>
+          <div class="field"><label for="c-matDt">만기일자</label><input type="text" inputmode="numeric" id="c-matDt" maxlength="10" placeholder="예: 20560816" /></div>
+          <div class="field c-auto-field"><label for="c-nextIntPayDt">다음이자납입일자</label><input type="text" inputmode="numeric" id="c-nextIntPayDt" maxlength="10" placeholder="예: 20560816" /></div>
+          <div class="field c-auto-field"><label for="c-nextRepayDt">다음상환일자</label><input type="text" inputmode="numeric" id="c-nextRepayDt" maxlength="10" placeholder="예: 20560816" /></div>
+          <div class="field c-auto-field"><label for="c-lastIntPayDt">최종이자납입일자</label><input type="text" inputmode="numeric" id="c-lastIntPayDt" maxlength="10" placeholder="예: 20560816" /></div>
+          <div class="field c-auto-field"><label for="c-lastRepayDt">최종상환일자</label><input type="text" inputmode="numeric" id="c-lastRepayDt" maxlength="10" placeholder="예: 20560816" /></div>
+          <div class="field c-auto-field"><label for="c-deadlineLossDt">기한이익상실일자</label><input type="text" inputmode="numeric" id="c-deadlineLossDt" maxlength="10" placeholder="예: 20560916" /></div>
           <div class="field"><label for="c-monthlyIntPayDay">매월이자납입일</label><input type="text" inputmode="numeric" id="c-monthlyIntPayDay" maxlength="2" placeholder="예: 10 (1~31, 2자리)" /></div>
           <div class="field">
             <label>기준금리 + 가산금리 = 적용금리 (%)</label>
@@ -693,6 +693,32 @@ function attachRateFormatting(input) {
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
+}
+
+// 네이티브 <input type="date">의 연/월/일 분리 입력 UX 대신, 숫자만 이어붙여 타이핑해도
+// YYYY-MM-DD로 자동 포맷되는 텍스트 입력용 -- 자릿수 8개(YYYYMMDD)로 캡, 4/6번째 자리 뒤에
+// 자동으로 대시를 넣는다. 계좌생성 화면처럼 키패드로 바로 날짜를 입력해야 하는 곳에서 사용.
+function attachDateFormatting(input) {
+  input.addEventListener('input', () => {
+    const digits = input.value.replace(/[^0-9]/g, '').slice(0, 8);
+    let formatted = digits;
+    if (digits.length > 4) formatted = `${digits.slice(0, 4)}-${digits.slice(4)}`;
+    if (digits.length > 6) formatted = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+    input.value = formatted;
+  });
+}
+
+// attachDateFormatting으로 입력된 값이 실제로 유효한 날짜(YYYY-MM-DD, 월 1~12, 일 해당 월의
+// 말일 이내)인지 검증한다 -- 텍스트 입력이라 네이티브 date input과 달리 브라우저가 걸러주지 않는다.
+function isValidDateInput(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12) return false;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  return day >= 1 && day <= daysInMonth;
 }
 
 // 이 화면(loan-calcurator)은 정적 화면만 서빙하고, 실제 업무 로직은 전부 아래 4개
@@ -1246,9 +1272,19 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     earlyRepayFeeRate: '조기상환수수료율은 필수입력사항입니다.',
     loanBalAmt: '대출잔액은 필수입력사항입니다.'
   };
+  // 등록/변경 공통 필수 날짜, UPDATE에서만 추가로 필수인 날짜(자동설정 필드지만 NOT NULL 컬럼) --
+  // 기한이익상실일자는 nullable이라 비어있는 건 허용하고, 값이 있을 때만 형식을 검사한다.
+  const REQUIRED_DATE_FIELD_LABELS = { newDt: '신규일자', matDt: '만기일자' };
+  const UPDATE_ONLY_REQUIRED_DATE_FIELD_LABELS = {
+    nextIntPayDt: '다음이자납입일자', nextRepayDt: '다음상환일자',
+    lastIntPayDt: '최종이자납입일자', lastRepayDt: '최종상환일자'
+  };
 
   ['c-loanLimitAmt', 'c-loanBalAmt'].forEach(id => attachAmountFormatting($(id)));
   ['c-baseRate', 'c-addRate', 'c-earlyRepayFeeRate'].forEach(id => attachRateFormatting($(id)));
+  // 날짜를 캘린더 선택 없이 키패드로 바로 입력할 수 있도록 -- 네이티브 date input 대신 텍스트+자동포맷.
+  ['c-newDt', 'c-matDt', 'c-nextIntPayDt', 'c-nextRepayDt', 'c-lastIntPayDt', 'c-lastRepayDt', 'c-deadlineLossDt']
+    .forEach(id => attachDateFormatting($(id)));
 
   function toYyyymmdd(isoDate) {
     return isoDate ? isoDate.replaceAll('-', '') : null;
@@ -1291,6 +1327,23 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     for (const id of requiredIds) {
       if (!$('c-' + id).value.trim()) return REQUIRED_FIELD_MESSAGES[id];
     }
+
+    // 날짜는 이제 키패드로 직접 타이핑하는 텍스트 입력이라 네이티브 date input과 달리 브라우저가
+    // 형식을 걸러주지 않는다 -- 자릿수/월일 범위를 여기서 직접 검증한다.
+    const dateFieldsToCheck = txnType === 'UPDATE'
+      ? { ...REQUIRED_DATE_FIELD_LABELS, ...UPDATE_ONLY_REQUIRED_DATE_FIELD_LABELS }
+      : REQUIRED_DATE_FIELD_LABELS;
+    for (const [id, label] of Object.entries(dateFieldsToCheck)) {
+      if (!isValidDateInput($('c-' + id).value.trim())) {
+        return `${label}를 올바른 날짜(YYYYMMDD 8자리)로 입력해주세요.`;
+      }
+    }
+    // 기한이익상실일자는 nullable이라 비어있는 건 허용, 값이 있으면 형식만 검사.
+    const deadlineLossDt = $('c-deadlineLossDt').value.trim();
+    if (txnType === 'UPDATE' && deadlineLossDt && !isValidDateInput(deadlineLossDt)) {
+      return '기한이익상실일자를 올바른 날짜(YYYYMMDD 8자리)로 입력해주세요.';
+    }
+
     const monthlyDay = Number($('c-monthlyIntPayDay').value.trim());
     if (!Number.isInteger(monthlyDay) || monthlyDay < 1 || monthlyDay > 31) {
       return '매월이자납입일은 1~31 사이의 숫자로 입력해주세요.';
@@ -1298,9 +1351,7 @@ sidebarOverlayEl.addEventListener('click', closeSidebar);
     if ($('c-rateChangeTypeCd').value === '02' && !$('c-rateChangeCycle').value) {
       return '금리변동주기는 변동금리 선택 시 필수입력사항입니다.';
     }
-    const newDt = $('c-newDt').value;
-    const matDt = $('c-matDt').value;
-    if (newDt && matDt && matDt <= newDt) {
+    if ($('c-matDt').value <= $('c-newDt').value) {
       return '만기일자는 신규일자보다 이후 날짜로 입력해주세요.';
     }
     return null;
